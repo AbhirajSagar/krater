@@ -1,0 +1,58 @@
+[
+  {
+    "id": "purple_nebula",
+    "name": "Purple Nebula",
+    "type": "cube",
+    "path": "/skyboxes/purple_nebula/",
+    "files": [
+      "px.png",
+      "nx.png",
+      "py.png",
+      "ny.png",
+      "pz.png",
+      "nz.png"
+    ]
+  },
+  {
+    "id": "blue_nebula",
+    "name": "Blue Nebula",
+    "type": "cube",
+    "path": "/skyboxes/blue_nebula/",
+    "files": [
+      "px.png",
+      "nx.png",
+      "py.png",
+      "ny.png",
+      "pz.png",
+      "nz.png"
+    ]
+  },
+  {
+    "id": "deep_space",
+    "name": "Deep Space",
+    "type": "cube",
+    "path": "/skyboxes/deep_space/",
+    "files": [
+      "px.png",
+      "nx.png",
+      "py.png",
+      "ny.png",
+      "pz.png",
+      "nz.png"
+    ]
+  },
+  {
+    "id": "golden_galaxy",
+    "name": "Golden Galaxy",
+    "type": "cube",
+    "path": "/skyboxes/golden_galaxy/",
+    "files": [
+      "px.png",
+      "nx.png",
+      "py.png",
+      "ny.png",
+      "pz.png",
+      "nz.png"
+    ]
+  }
+]

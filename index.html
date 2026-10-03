@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Spaceship Flight Simulator</title>
+  </head>
+  <body>
+    <canvas id="app"></canvas>
+
+    <!-- Sci-Fi HUD Crosshair -->
+    <div id="crosshair-container" class="crosshair-container">
+      <div class="crosshair-hud">
+        <div class="crosshair-dot"></div>
+        <div class="crosshair-circle"></div>
+        <div class="crosshair-bracket top-left"></div>
+        <div class="crosshair-bracket top-right"></div>
+        <div class="crosshair-bracket bottom-left"></div>
+        <div class="crosshair-bracket bottom-right"></div>
+        <div class="crosshair-line line-top"></div>
+        <div class="crosshair-line line-bottom"></div>
+        <div class="crosshair-line line-left"></div>
+        <div class="crosshair-line line-right"></div>
+      </div>
+    </div>
+
+    <!-- Single barely visible white transparent joystick for touch devices -->
+    <div id="touch-controls">
+      <div id="joystick" class="touch-joystick-zone">
+        <div class="joystick-base">
+          <div class="joystick-knob" id="joystick-knob"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
