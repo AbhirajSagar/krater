@@ -1,8 +1,12 @@
-import * as THREE from 'three';
+  import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { createStarSparrowMaterial, SPARROW_THEMES, THEME_KEYS } from './StarSparrowMaterial.js';
 import { SPACESHIP_CONFIGS, getSpaceshipConfig } from './spaceshipConfig.js';
 import { ThrusterFlame, ThrusterSparkSystem } from './ThrusterVFX.js';
+
+// Static vectors to prevent allocations in projectile updates
+const _pOldPos = new THREE.Vector3();
+const _pNewPos = new THREE.Vector3();
 
 export class SpaceshipController {
   /**
@@ -14,6 +18,9 @@ export class SpaceshipController {
     this.scene = scene;
     this.camera = camera;
     this.domElement = domElement;
+    this.cameraShake = 0.0;
+    this.cameraShakeDecay = 12.0;
+    this.cameraShakeStrength = 0.22;
 
     // Root container for spaceship physics and position
     this.root = new THREE.Group();
@@ -51,11 +58,11 @@ export class SpaceshipController {
     this.targetSpeed = 0.0;
     this.velocity = new THREE.Vector3();
 
-    // Boost energy
-    this.maxBoostEnergy = 100.0;
-    this.boostEnergy = 100.0;
-    this.boostCostPerSecond = 35.0;
-    this.boostRechargeRate = 20.0;
+    // Boost energy (temporarily boosted for video recording)
+    this.maxBoostEnergy = 1000.0;
+    this.boostEnergy = 1000.0;
+    this.boostCostPerSecond = 2.5; // ~400 seconds of continuous boost
+    this.boostRechargeRate = 80.0;
     this.isBoosting = false;
 
     // Rotation parameters (radians/sec) - calibrated for smooth, controllable flight
@@ -100,13 +107,14 @@ export class SpaceshipController {
     // Thruster supersonic afterburner sparks & embers
     this.sparkSystem = new ThrusterSparkSystem(this.scene, 280);
 
-    // Laser weapon projectiles
-    this.laserProjectiles = [];
+    // Laser weapon projectile pool (zero runtime allocations, zero scene mutations)
+    this.setupLaserPool(48);
     this.lastFireTime = 0;
 
     // Crosshair HUD & Aim Target
     this.crosshairContainer = typeof document !== 'undefined' ? document.getElementById('crosshair-container') : null;
     this.targetMeshes = [];
+    this.asteroidField = null;
     this.aimTargetPoint = null;
     this._aimRaycaster = new THREE.Raycaster();
     this._aimRaycaster.far = 800;
@@ -261,9 +269,11 @@ export class SpaceshipController {
       this.pitchSpeed = config.handling.pitchSpeed ?? this.pitchSpeed;
       this.yawSpeed = config.handling.yawSpeed ?? this.yawSpeed;
       this.rollSpeed = config.handling.rollSpeed ?? this.rollSpeed;
-      this.maxBoostEnergy = config.handling.boostEnergy ?? this.maxBoostEnergy;
-      this.boostCostPerSecond = config.handling.boostCostPerSecond ?? this.boostCostPerSecond;
-      this.boostRechargeRate = config.handling.boostRechargeRate ?? this.boostRechargeRate;
+      // Temporarily boosted for video recording
+      this.maxBoostEnergy = 1000.0;
+      this.boostCostPerSecond = 2.5; // ~400 seconds of continuous boost
+      this.boostRechargeRate = 80.0;
+      this.boostEnergy = this.maxBoostEnergy;
     }
 
     // Check model cache
@@ -347,12 +357,21 @@ export class SpaceshipController {
     }
   }
 
+  setAsteroidField(field) {
+    this.asteroidField = field;
+    this.setTargetObjects(field.getMeshes());
+  }
+
   setTargetObjects(objects) {
     this.targetMeshes = objects || [];
   }
 
   updateCrosshairAim() {
     if (!this.crosshairContainer || this.cameraMode === 2) return;
+
+    if (this.asteroidField) {
+      this.targetMeshes = this.asteroidField.getMeshes();
+    }
 
     if (this.targetMeshes && this.targetMeshes.length > 0) {
       this._aimRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
@@ -531,7 +550,13 @@ export class SpaceshipController {
     }
   }
 
+  triggerCameraShake(strength = this.cameraShakeStrength) {
+    this.cameraShake = Math.max(this.cameraShake, strength);
+  }
+
   updateCamera(dt) {
+    this.cameraShake = THREE.MathUtils.lerp(this.cameraShake, 0, 1 - Math.exp(-this.cameraShakeDecay * dt));
+
     // Dynamic FOV based on speed and boost
     const speedRatio = Math.min(1.0, Math.abs(this.currentSpeed) / this.boostSpeed);
     const targetFov = this.isBoosting ? this.boostFov : this.baseFov + speedRatio * 8.0;
@@ -549,6 +574,11 @@ export class SpaceshipController {
         .copy(this.root.position)
         .addScaledVector(forward, -this.cameraChaseOffset.z)
         .addScaledVector(up, this.cameraChaseOffset.y);
+
+      const shake = this.cameraShake;
+
+      if (shake > 0.001) 
+        idealPos.add(new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, -shake * 0.5));
 
       // Subtle camera shake on boost
       if (this.isBoosting) {
@@ -711,6 +741,8 @@ export class SpaceshipController {
       }, 90);
     }
 
+    this.triggerCameraShake();
+
     // Determine target point along crosshair line of sight
     let targetPoint = this.aimTargetPoint;
     if (!targetPoint) {
@@ -732,99 +764,131 @@ export class SpaceshipController {
     }
 
     for (const sp of points) {
+      // Find inactive projectile from pool
+      let p = null;
+      for (let i = 0; i < this.maxProjectiles; i++) {
+        if (!this.laserPool[i].active) {
+          p = this.laserPool[i];
+          break;
+        }
+      }
+      if (!p) {
+        p = this.activeProjectiles.shift();
+      }
+
       const pos = sp.position || { x: 0, y: 0, z: -1 };
       const localPos = new THREE.Vector3(pos.x, pos.y, pos.z);
       const worldPos = localPos.clone().applyMatrix4(this.visualHolder.matrixWorld);
 
-      // Compute trajectory towards crosshair target point
       let boltDir = new THREE.Vector3().subVectors(targetPoint, worldPos).normalize();
       if (targetPoint.distanceTo(worldPos) < 2.0) {
         boltDir.copy(forwardDir);
       }
 
       const colorHex = sp.color || '#ff2244';
-      const boltColor = new THREE.Color(colorHex);
-      const radius = Math.max(0.04, (sp.size || 0.12) * 0.8);
-      const length = 2.4;
+      p.outerMesh.material = this.getLaserMaterial(colorHex);
 
-      const boltGroup = new THREE.Group();
-      boltGroup.position.copy(worldPos);
-      boltGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), boltDir);
+      p.group.position.copy(worldPos);
+      p.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), boltDir);
+      p.dir.copy(boltDir);
+      p.speed = 160.0;
+      p.life = 0.0;
+      p.maxLife = 1.4;
+      p.colorHex = colorHex;
+      p.active = true;
+      p.group.visible = true;
 
-      const geom = new THREE.CylinderGeometry(radius * 0.5, radius, length, 8);
-      geom.rotateX(Math.PI / 2);
-      const mat = new THREE.MeshBasicMaterial({
-        color: boltColor,
-        transparent: true,
-        opacity: 0.9,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const mesh = new THREE.Mesh(geom, mat);
-      boltGroup.add(mesh);
+      this.activeProjectiles.push(p);
+    }
+  }
 
-      const coreGeom = new THREE.CylinderGeometry(radius * 0.22, radius * 0.3, length * 0.9, 6);
-      coreGeom.rotateX(Math.PI / 2);
-      const coreMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.95,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const coreMesh = new THREE.Mesh(coreGeom, coreMat);
-      boltGroup.add(coreMesh);
+  setupLaserPool(size = 48) {
+    this.maxProjectiles = size;
+    this.laserPool = [];
+    this.activeProjectiles = [];
 
-      const pLight = new THREE.PointLight(boltColor, 2.5, 9.0);
-      boltGroup.add(pLight);
+    // Shared reusable geometries across all laser bolts
+    this.laserGeom = new THREE.CylinderGeometry(0.045, 0.08, 2.4, 8);
+    this.laserGeom.rotateX(Math.PI / 2);
 
-      this.scene.add(boltGroup);
+    this.laserCoreGeom = new THREE.CylinderGeometry(0.018, 0.028, 2.1, 6);
+    this.laserCoreGeom.rotateX(Math.PI / 2);
 
-      if (this.laserProjectiles.length >= 36) {
-        const oldest = this.laserProjectiles.shift();
-        this.scene.remove(oldest.group);
-        oldest.geom.dispose();
-        oldest.mat.dispose();
-        oldest.coreGeom.dispose();
-        oldest.coreMat.dispose();
-      }
+    this.laserCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
 
-      this.laserProjectiles.push({
-        group: boltGroup,
-        dir: boltDir.clone(),
-        speed: 150.0,
+    this.laserMaterialCache = new Map();
+    const defaultMat = this.getLaserMaterial('#ff2244');
+
+    for (let i = 0; i < size; i++) {
+      const group = new THREE.Group();
+      group.visible = false;
+
+      const outerMesh = new THREE.Mesh(this.laserGeom, defaultMat);
+      const coreMesh = new THREE.Mesh(this.laserCoreGeom, this.laserCoreMat);
+      group.add(outerMesh);
+      group.add(coreMesh);
+
+      // Pre-add to scene so scene graph never mutates at runtime
+      this.scene.add(group);
+
+      this.laserPool.push({
+        group,
+        outerMesh,
+        dir: new THREE.Vector3(),
+        speed: 160.0,
         life: 0.0,
-        maxLife: 1.5,
-        geom,
-        mat,
-        coreGeom,
-        coreMat
+        maxLife: 1.4,
+        colorHex: '#ff2244',
+        active: false
       });
     }
   }
 
+  getLaserMaterial(colorHex) {
+    if (!this.laserMaterialCache.has(colorHex)) {
+      this.laserMaterialCache.set(colorHex, new THREE.MeshBasicMaterial({
+        color: new THREE.Color(colorHex),
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      }));
+    }
+    return this.laserMaterialCache.get(colorHex);
+  }
+
   updateLaserProjectiles(dt) {
-    if (!this.laserProjectiles || this.laserProjectiles.length === 0) return;
+    if (this.activeProjectiles.length === 0) return;
 
-    for (let i = this.laserProjectiles.length - 1; i >= 0; i--) {
-      const p = this.laserProjectiles[i];
+    for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
+      const p = this.activeProjectiles[i];
       p.life += dt;
-      p.group.position.addScaledVector(p.dir, p.speed * dt);
 
-      const progress = p.life / p.maxLife;
-      if (progress > 0.65) {
-        const fade = (1.0 - progress) / 0.35;
-        p.mat.opacity = THREE.MathUtils.clamp(fade * 0.9, 0, 0.9);
-        p.coreMat.opacity = THREE.MathUtils.clamp(fade * 0.95, 0, 0.95);
+      _pOldPos.copy(p.group.position);
+      p.group.position.addScaledVector(p.dir, p.speed * dt);
+      _pNewPos.copy(p.group.position);
+
+      // Check collision against asteroids
+      if (this.asteroidField) {
+        const hit = this.asteroidField.checkLaserHit(_pOldPos, _pNewPos, p.colorHex);
+        if (hit) {
+          p.active = false;
+          p.group.visible = false;
+          this.activeProjectiles.splice(i, 1);
+          continue;
+        }
       }
 
       if (p.life >= p.maxLife) {
-        this.scene.remove(p.group);
-        p.geom.dispose();
-        p.mat.dispose();
-        p.coreGeom.dispose();
-        p.coreMat.dispose();
-        this.laserProjectiles.splice(i, 1);
+        p.active = false;
+        p.group.visible = false;
+        this.activeProjectiles.splice(i, 1);
       }
     }
   }

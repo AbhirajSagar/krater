@@ -11,12 +11,7 @@ const canvas = document.getElementById('app');
 const scene = new THREE.Scene();
 
 // Camera setup
-const camera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  2000
-);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 3, 10);
 
 // Renderer setup
@@ -68,7 +63,7 @@ const spaceDust = new SpaceDust(scene, 1800, 160);
 
 // Asteroid Field - low-poly procedural rocks in space to fly around
 const asteroidField = new AsteroidField(scene, 140);
-spaceship.setTargetObjects(asteroidField.getMeshes());
+spaceship.setAsteroidField(asteroidField);
 
 // Touch Joystick Controls for mobile / small screen sizes
 new TouchControls(spaceship, skyboxManager);
@@ -92,6 +87,9 @@ function animate() {
 
   renderer.render(scene, camera);
 }
+
+// Pre-compile all scene shaders on startup to eliminate runtime stutters
+renderer.compile(scene, camera);
 
 animate();
 
