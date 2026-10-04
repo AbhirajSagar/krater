@@ -24,12 +24,15 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 3, 10);
 
+// Recorder toggle flag (temporarily disabled)
+const ENABLE_RECORDER = false;
+
 // 4. Renderer setup
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
   powerPreference: 'high-performance',
-  preserveDrawingBuffer: true
+  preserveDrawingBuffer: ENABLE_RECORDER
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -38,8 +41,8 @@ renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-// 9:16 High-Performance Gameplay Recorder (captures pure WebGL canvas without any UI in the recording)
-const gameplayRecorder = new GameplayRecorder(canvas);
+// 16:9 High-Performance Gameplay Recorder (set ENABLE_RECORDER to true to re-enable)
+const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
 
 // 5. Lighting setup
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);

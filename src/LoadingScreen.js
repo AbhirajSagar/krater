@@ -139,7 +139,7 @@ export class LoadingScreen {
     }
     if (this.promptEl) {
       const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-      this.promptEl.textContent = isTouch ? 'TAP ANYWHERE TO CONTINUE' : 'CLICK ANYWHERE TO CONTINUE';
+      this.promptEl.textContent = isTouch ? 'TAP ANYWHERE TO CONTINUE \n (PLAY IN LANDSCAPE MODE)' : 'CLICK ANYWHERE TO CONTINUE';
       this.promptEl.classList.add('visible');
     }
 

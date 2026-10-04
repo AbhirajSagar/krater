@@ -1,30 +1,38 @@
 /**
- * GameplayRecorder - High-Performance 9:16 Short Media Video Recorder
+ * GameplayRecorder - High-Performance 16:9 Video Recorder
  * 
  * Optimized for silky-smooth 60 FPS gameplay without sacrificing framerate or causing stutter:
  * - Direct GPU-accelerated frame blitting (< 0.2ms overhead per frame)
  * - Zero artificial render-target overhead or main scene pixel-ratio inflation
- * - Broadcast-quality 1080x1920 (Full HD) and lightweight 720x1280 (HD) presets
+ * - Broadcast-quality 1920x1080 (Full HD) and lightweight 1280x720 (HD) presets
  * - Excludes all DOM UI (crosshair, touch controls, menus, recorder button)
- * - Exact 9:16 aspect ratio for YouTube Shorts, TikTok, and Instagram Reels
+ * - Exact 16:9 widescreen aspect ratio for YouTube, Twitch, and standard displays
  */
 export class GameplayRecorder {
   /**
    * @param {HTMLCanvasElement} sourceCanvas - Main game WebGL canvas
+   * @param {object} [options]
+   * @param {boolean} [options.enabled=false] - Whether recording functionality is active
    */
-  constructor(sourceCanvas) {
+  constructor(sourceCanvas, { enabled = false } = {}) {
+    this.enabled = enabled;
     this.sourceCanvas = sourceCanvas;
     this.isRecording = false;
     this.mediaRecorder = null;
     this.recordedChunks = [];
     this.stream = null;
     this.videoTrack = null;
+    this.btn = null;
 
-    // Quality preset: '1080p' (1080x1920 @ 12 Mbps) or '720p' (720x1280 @ 7 Mbps)
+    if (!this.enabled) {
+      return;
+    }
+
+    // Quality preset: '1080p' (1920x1080 @ 12 Mbps) or '720p' (1280x720 @ 7 Mbps)
     this.quality = '1080p';
     this.updateDimensions();
 
-    // Offscreen 9:16 canvas for video stream (zero DOM impact)
+    // Offscreen 16:9 canvas for video stream (zero DOM impact)
     this.recordCanvas = document.createElement('canvas');
     this.recordCanvas.width = this.targetWidth;
     this.recordCanvas.height = this.targetHeight;
@@ -47,13 +55,13 @@ export class GameplayRecorder {
 
   updateDimensions() {
     if (this.quality === '720p') {
-      this.targetWidth = 720;
-      this.targetHeight = 1280;
+      this.targetWidth = 1280;
+      this.targetHeight = 720;
       this.targetBitrate = 7000000; // 7 Mbps
     } else {
-      this.targetWidth = 1080;
-      this.targetHeight = 1920;
-      this.targetBitrate = 12000000; // 12 Mbps (YouTube/TikTok recommended for 1080p60)
+      this.targetWidth = 1920;
+      this.targetHeight = 1080;
+      this.targetBitrate = 12000000; // 12 Mbps (YouTube recommended for 1080p60)
     }
 
     if (this.recordCanvas) {
@@ -90,8 +98,8 @@ export class GameplayRecorder {
       btn = document.createElement('button');
       btn.id = 'btn-record-toggle';
       btn.className = 'record-toggle-btn';
-      btn.setAttribute('aria-label', 'Record 9:16 Gameplay');
-      btn.setAttribute('title', 'Start/Stop 9:16 Recording (F9)');
+      btn.setAttribute('aria-label', 'Record 16:9 Gameplay');
+      btn.setAttribute('title', 'Start/Stop 16:9 Recording (F9)');
       btn.innerHTML = `
         <span class="record-dot" id="record-dot"></span>
         <span class="record-label" id="record-label">REC</span>
@@ -106,12 +114,14 @@ export class GameplayRecorder {
   }
 
   showToggleButton() {
+    if (!this.enabled) return;
     if (this.btn) {
       this.btn.classList.add('visible');
     }
   }
 
   hideToggleButton() {
+    if (!this.enabled) return;
     if (this.btn) {
       this.btn.classList.remove('visible');
     }
@@ -140,7 +150,7 @@ export class GameplayRecorder {
   }
 
   toggleQuality() {
-    if (this.isRecording) return;
+    if (!this.enabled || this.isRecording) return;
     this.quality = this.quality === '1080p' ? '720p' : '1080p';
     this.updateDimensions();
     if (this.qualityEl) {
@@ -149,6 +159,7 @@ export class GameplayRecorder {
   }
 
   toggleRecording() {
+    if (!this.enabled) return;
     if (this.isRecording) {
       this.stopRecording();
     } else {
@@ -157,7 +168,7 @@ export class GameplayRecorder {
   }
 
   startRecording() {
-    if (this.isRecording) return;
+    if (!this.enabled || this.isRecording) return;
     if (typeof MediaRecorder === 'undefined') {
       alert('MediaRecorder is not supported in this browser.');
       return;
@@ -166,7 +177,7 @@ export class GameplayRecorder {
     this.recordedChunks = [];
     this.updateDimensions();
 
-    // Capture 60 FPS stream from offscreen 9:16 canvas
+    // Capture 60 FPS stream from offscreen 16:9 canvas
     try {
       this.stream = this.recordCanvas.captureStream(60);
       const tracks = this.stream.getVideoTracks();
@@ -267,7 +278,7 @@ export class GameplayRecorder {
 
     const date = new Date();
     const timeTag = date.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    a.download = `spacegame-9x16-${this.quality}-${timeTag}.${ext}`;
+    a.download = `spacegame-16x9-${this.quality}-${timeTag}.${ext}`;
 
     document.body.appendChild(a);
     a.click();
@@ -292,7 +303,7 @@ export class GameplayRecorder {
     this.isRecording = false;
     if (this.btn) {
       this.btn.classList.remove('recording');
-      this.btn.setAttribute('title', 'Start/Stop 9:16 Recording (F9)');
+      this.btn.setAttribute('title', 'Start/Stop 16:9 Recording (F9)');
     }
     if (this.labelEl) {
       this.labelEl.textContent = 'REC';
@@ -304,28 +315,28 @@ export class GameplayRecorder {
 
   /**
    * Called every animation frame in the main render loop right after WebGL render.
-   * Performs an ultra-fast GPU texture blit of the center 9:16 slice onto the offscreen record canvas (< 0.2ms).
+   * Performs an ultra-fast GPU texture blit of the center 16:9 slice onto the offscreen record canvas (< 0.2ms).
    * @param {HTMLCanvasElement} sourceCanvas
    */
   recordFrame(sourceCanvas) {
-    if (!this.isRecording) return;
+    if (!this.enabled || !this.isRecording) return;
     const srcW = sourceCanvas.width;
     const srcH = sourceCanvas.height;
     if (!srcW || !srcH) return;
 
-    const targetAspect = 9 / 16; // 0.5625
+    const targetAspect = 16 / 9; // ~1.7778
     const srcAspect = srcW / srcH;
 
     let cropW, cropH, cropX, cropY;
 
     if (srcAspect > targetAspect) {
-      // Screen is wider than 9:16 (landscape / standard monitor)
+      // Screen is wider than 16:9 (e.g. 21:9 ultrawide)
       cropH = srcH;
       cropW = Math.round(srcH * targetAspect);
       cropX = Math.round((srcW - cropW) / 2);
       cropY = 0;
     } else {
-      // Screen is taller than 9:16 (tall mobile screen)
+      // Screen is taller than 16:9 (e.g. 16:10, 4:3, or portrait mobile)
       cropW = srcW;
       cropH = Math.round(srcW / targetAspect);
       cropX = 0;
