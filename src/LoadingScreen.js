@@ -1,6 +1,7 @@
 /**
  * Minimal Glassmorphic Loading Screen
- * Displays a clean frosted glass card with percentage and loading bar.
+ * Displays a clean frosted glass card with percentage, loading bar,
+ * and upon completion prompts the user to click anywhere to enter fullscreen and launch.
  */
 export class LoadingScreen {
   constructor() {
@@ -25,6 +26,7 @@ export class LoadingScreen {
           <div class="glass-bar-track">
             <div class="glass-bar-fill" id="loading-bar-fill"></div>
           </div>
+          <div class="loading-prompt" id="loading-prompt">CLICK ANYWHERE TO START FULLSCREEN</div>
         </div>
       `;
       document.body.prepend(screen);
@@ -33,6 +35,7 @@ export class LoadingScreen {
     this.container = screen;
     this.percentEl = document.getElementById('loading-percent');
     this.barFillEl = document.getElementById('loading-bar-fill');
+    this.promptEl = document.getElementById('loading-prompt');
   }
 
   /**
@@ -83,8 +86,38 @@ export class LoadingScreen {
   setTelemetry() {}
 
   /**
-   * Completes loading, marks 100%, and smoothly fades out the overlay
-   * @returns {Promise<void>} Resolves when fade-out animation completes
+   * Cross-browser safe fullscreen request inside a user gesture
+   */
+  async requestFullscreenSafe() {
+    try {
+      const isAlreadyFull = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+
+      if (!isAlreadyFull) {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        } else if (el.mozRequestFullScreen) {
+          await el.mozRequestFullScreen();
+        } else if (el.msRequestFullscreen) {
+          await el.msRequestFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen request was declined or bypassed:', err);
+    }
+  }
+
+  /**
+   * Completes loading, marks 100%, prompts user to click anywhere,
+   * triggers fullscreen on user click, and smoothly fades out the overlay.
+   * @returns {Promise<void>} Resolves when user clicks anywhere and fade-out completes
    */
   async finish() {
     this.setProgress(100);
@@ -98,9 +131,43 @@ export class LoadingScreen {
     if (this.barFillEl) this.barFillEl.style.width = '100%';
 
     // Brief pause at 100%
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 120));
 
-    // Smooth fade-out
+    // Reveal "Click anywhere to start fullscreen" prompt
+    if (this.container) {
+      this.container.classList.add('ready');
+    }
+    if (this.promptEl) {
+      const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      this.promptEl.textContent = isTouch ? 'TAP ANYWHERE TO CONTINUE' : 'CLICK ANYWHERE TO CONTINUE';
+      this.promptEl.classList.add('visible');
+    }
+
+    // Wait for user gesture anywhere on screen
+    await new Promise((resolve) => {
+      const onUserAction = async (e) => {
+        window.removeEventListener('click', onUserAction);
+        window.removeEventListener('touchend', onUserAction);
+        window.removeEventListener('keydown', onKeyAction);
+
+        // Trigger fullscreen directly inside the user activation event
+        await this.requestFullscreenSafe();
+
+        resolve();
+      };
+
+      const onKeyAction = async (e) => {
+        if (e.code === 'Space' || e.code === 'Enter') {
+          onUserAction(e);
+        }
+      };
+
+      window.addEventListener('click', onUserAction, { once: true });
+      window.addEventListener('touchend', onUserAction, { once: true });
+      window.addEventListener('keydown', onKeyAction);
+    });
+
+    // Smooth fade-out after user gesture
     if (this.container) {
       this.container.classList.add('fade-out');
     }

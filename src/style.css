@@ -386,13 +386,13 @@ html, body {
 
 /* Centered Glassmorphic Card */
 .glass-card {
-  width: 260px;
-  max-width: 82vw;
+  width: 320px;
+  max-width: 88vw;
   padding: 30px 32px 34px 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
 }
 
 /* Minimal Percentage Number */
@@ -423,6 +423,44 @@ html, body {
   border-radius: 9999px;
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
   transition: width 0.15s ease-out;
+}
+
+/* Click anywhere to start prompt */
+.loading-screen.ready {
+  cursor: pointer;
+}
+
+.loading-prompt {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  line-height: 1.4;
+}
+
+.loading-prompt.visible {
+  opacity: 1;
+  transform: translateY(0);
+  animation: pulsePrompt 2s infinite ease-in-out;
+}
+
+@keyframes pulsePrompt {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+  }
 }
 
 /* =========================================================
