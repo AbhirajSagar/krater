@@ -153,11 +153,7 @@ export class SpaceshipController {
         if (e.code === 'Enter' || e.code === 'NumpadEnter') {
           e.preventDefault();
         }
-        const now = performance.now();
-        if (!this.lastFireTime || (now - this.lastFireTime) > 130) {
-          this.lastFireTime = now;
-          this.testFireWeapons();
-        }
+        this.fireWeapons();
       }
 
       // Number keys 1-9 and 0 for quick ship switch
@@ -760,6 +756,22 @@ export class SpaceshipController {
     if (config.thrusters && config.thrusters[0] && this.sparkSystem) {
       this.sparkSystem.setColor(config.thrusters[0].color);
     }
+  }
+
+  /**
+   * Fires laser weapons with automatic rate-limiting and enabled-state check
+   * @param {Array} [customShootingPoints]
+   * @returns {boolean} Whether lasers were fired
+   */
+  fireWeapons(customShootingPoints = null) {
+    if (!this.enabled) return false;
+    const now = performance.now();
+    if (!this.lastFireTime || (now - this.lastFireTime) > 130) {
+      this.lastFireTime = now;
+      this.testFireWeapons(customShootingPoints);
+      return true;
+    }
+    return false;
   }
 
   testFireWeapons(customShootingPoints = null) {

@@ -35,12 +35,20 @@
       </div>
     </div>
 
-    <!-- Single barely visible white transparent joystick for touch devices -->
+    <!-- Touch controls for touch & mobile devices -->
     <div id="touch-controls">
+      <!-- Left: Steering & Throttle Joystick -->
       <div id="joystick" class="touch-joystick-zone">
         <div class="joystick-base">
           <div class="joystick-knob" id="joystick-knob"></div>
         </div>
+      </div>
+
+      <!-- Right: Laser Weapon Fire Button -->
+      <div id="touch-shoot-zone" class="touch-shoot-zone">
+        <button id="btn-touch-shoot" class="touch-shoot-btn" aria-label="Fire Weapons" title="Tap to Fire">
+          <div class="shoot-btn-core"></div>
+        </button>
       </div>
     </div>
 

@@ -57,45 +57,143 @@ html, body {
 
 .touch-joystick-zone {
   position: absolute;
-  bottom: 35px;
-  left: 35px;
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
   touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.85);
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity, left, top;
+  z-index: 52;
 }
 
-/* Barely visible white transparent base */
+.touch-joystick-zone.visible {
+  opacity: 0.65;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Slightly transparent white base */
 .joystick-base {
   position: relative;
-  width: 105px;
-  height: 105px;
+  width: 95px;
+  height: 95px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.2);
 }
 
-/* Barely visible white transparent knob */
+/* Slightly transparent white knob */
 .joystick-knob {
   position: absolute;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
   pointer-events: none;
   transform: translate(0px, 0px);
   transition: transform 0.04s ease-out;
   will-change: transform;
+}
+
+/* Right-hand side shoot zone */
+.touch-shoot-zone {
+  position: absolute;
+  bottom: 35px;
+  right: 35px;
+  width: 100px;
+  height: 100px;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 52;
+}
+
+/* Slightly transparent minimal glass shoot button (no crosshair icon) */
+.touch-shoot-btn {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0.6;
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.15s ease,
+              border-color 0.15s ease,
+              opacity 0.2s ease,
+              box-shadow 0.15s ease;
+}
+
+/* Minimal glowing laser core inside shoot button */
+.shoot-btn-core {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Active tap state (semi-automatic tap feedback) */
+.touch-shoot-btn:active,
+.touch-shoot-btn.active {
+  opacity: 0.95;
+  transform: scale(0.9);
+  background: rgba(244, 63, 94, 0.2);
+  border-color: rgba(244, 63, 94, 0.7);
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.45),
+              inset 0 0 10px rgba(244, 63, 94, 0.25);
+}
+
+.touch-shoot-btn:active .shoot-btn-core,
+.touch-shoot-btn.active .shoot-btn-core {
+  transform: scale(1.15);
+  background: #ff3366;
+  border-color: #ff6688;
+  box-shadow: 0 0 12px rgba(255, 51, 102, 0.85);
+}
+
+@media (max-width: 600px), (max-height: 480px) {
+  .touch-shoot-zone {
+    bottom: 20px;
+    right: 20px;
+    width: 88px;
+    height: 88px;
+  }
+  .touch-shoot-btn {
+    width: 60px;
+    height: 60px;
+  }
 }
 
 /* =========================================================
@@ -325,4 +423,226 @@ html, body {
   border-radius: 9999px;
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
   transition: width 0.15s ease-out;
+}
+
+/* =========================================================
+   MINIMAL GLASSMORPHIC OPTIONS DIALOG & FULLSCREEN
+   ========================================================= */
+
+/* Options Toggle Button (Top-Right) */
+.options-toggle-btn {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  z-index: 60;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.options-toggle-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.options-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.06);
+}
+
+.options-toggle-btn:active {
+  transform: scale(0.94);
+}
+
+/* Dialog Overlay Backdrop */
+.options-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 150;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.25s ease;
+}
+
+.options-dialog-backdrop.hidden {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Glass Dialog Card */
+.glass-dialog {
+  width: 340px;
+  max-width: 90vw;
+  padding: 24px 26px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5),
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 12px;
+}
+
+.dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.dialog-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  outline: none;
+  padding: 0 4px;
+  transition: color 0.2s ease;
+}
+
+.dialog-close-btn:hover {
+  color: #ffffff;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Setting Row */
+.option-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  gap: 14px;
+}
+
+.option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.option-desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Small Glass Button */
+.glass-btn-sm {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.glass-btn-sm:active {
+  transform: translateY(0);
+}
+
+.glass-btn-sm.active {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+}
+
+/* Placeholder for future options */
+.dialog-section-placeholder {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.placeholder-tag {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+}
+
+.placeholder-desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1.4;
+}
+
+.hidden {
+  display: none !important;
 }

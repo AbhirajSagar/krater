@@ -6,10 +6,14 @@ import { SpaceshipController } from './SpaceshipController.js';
 import { SpaceDust } from './SpaceDust.js';
 import { AsteroidField } from './AsteroidField.js';
 import { TouchControls } from './TouchControls.js';
+import { OptionsMenu } from './OptionsMenu.js';
 
 // 1. Initialize Minimal Glassmorphic Loading Screen
 const loadingScreen = new LoadingScreen();
 loadingScreen.setProgress(5);
+
+// Minimal Options Menu dialog & Fullscreen toggle
+const optionsMenu = new OptionsMenu();
 
 // 2. Canvas & Scene setup
 const canvas = document.getElementById('app');
@@ -69,6 +73,7 @@ async function initPipeline() {
 
   // Phase 2: Spaceship Controller (38% -> 80%)
   const spaceship = new SpaceshipController(scene, camera, canvas, { autoLoad: false });
+  optionsMenu.setSpaceship(spaceship);
 
   // Phase 3: Ship FBX Mesh & 2K PBR Textures
   await spaceship.selectShip(0, (progress) => {
@@ -104,8 +109,9 @@ async function initPipeline() {
   loadingScreen.setProgress(100);
   await loadingScreen.finish();
 
-  // Enable controls & unveil HUD
+  // Enable controls & unveil HUD and Options button
   spaceship.enabled = true;
+  optionsMenu.showToggleButton();
 
   const crosshairContainer = document.getElementById('crosshair-container');
   if (crosshairContainer) crosshairContainer.classList.add('visible');
