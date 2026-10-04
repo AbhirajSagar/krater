@@ -7,6 +7,7 @@ import { SpaceDust } from './SpaceDust.js';
 import { AsteroidField } from './AsteroidField.js';
 import { TouchControls } from './TouchControls.js';
 import { OptionsMenu } from './OptionsMenu.js';
+import { GameplayRecorder } from './GameplayRecorder.js';
 
 // 1. Initialize Minimal Glassmorphic Loading Screen
 const loadingScreen = new LoadingScreen();
@@ -27,7 +28,8 @@ camera.position.set(0, 3, 10);
 const renderer = new THREE.WebGLRenderer({
   canvas,
   antialias: true,
-  powerPreference: 'high-performance'
+  powerPreference: 'high-performance',
+  preserveDrawingBuffer: true
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -35,6 +37,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// 9:16 High-Performance Gameplay Recorder (captures pure WebGL canvas without any UI in the recording)
+const gameplayRecorder = new GameplayRecorder(canvas);
 
 // 5. Lighting setup
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
@@ -109,9 +114,10 @@ async function initPipeline() {
   loadingScreen.setProgress(100);
   await loadingScreen.finish();
 
-  // Enable controls & unveil HUD and Options button
+  // Enable controls & unveil HUD, Options button, and Recorder button
   spaceship.enabled = true;
   optionsMenu.showToggleButton();
+  gameplayRecorder.showToggleButton();
 
   const crosshairContainer = document.getElementById('crosshair-container');
   if (crosshairContainer) crosshairContainer.classList.add('visible');
@@ -141,6 +147,9 @@ initPipeline().then(({ spaceship, spaceDust, asteroidField }) => {
     sunLight.target.updateMatrixWorld();
 
     renderer.render(scene, camera);
+
+    // Record frame if recording is active (captures pure WebGL canvas without any UI)
+    gameplayRecorder.recordFrame(canvas);
   }
 
   animate();

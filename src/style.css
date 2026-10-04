@@ -646,3 +646,130 @@ html, body {
 .hidden {
   display: none !important;
 }
+
+/* =========================================================
+   MINIMAL 9:16 GAMEPLAY RECORDER BUTTON
+   ========================================================= */
+
+.record-toggle-btn {
+  position: fixed;
+  top: 22px;
+  right: 74px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  z-index: 60;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease, border-color 0.25s ease;
+}
+
+.record-toggle-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.record-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.record-toggle-btn:active {
+  transform: translateY(0) scale(0.95);
+}
+
+.record-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.7);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.record-label {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+.record-quality {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.record-quality:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+/* Active Recording State */
+.record-toggle-btn.recording {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.45);
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.3);
+}
+
+.record-toggle-btn.recording .record-quality {
+  background: rgba(244, 63, 94, 0.25);
+  color: #fca5a5;
+  pointer-events: none;
+}
+
+.record-toggle-btn.recording .record-dot {
+  border-radius: 2px; /* square stop icon */
+  width: 9px;
+  height: 9px;
+  background: #f43f5e;
+  animation: pulseRecDot 1.2s infinite ease-in-out;
+}
+
+.record-toggle-btn.recording .record-label {
+  color: #fca5a5;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulseRecDot {
+  0% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 12px #f43f5e; }
+  100% { opacity: 0.4; transform: scale(0.85); }
+}
+
+@media (max-width: 900px) {
+  .record-toggle-btn {
+    top: 18px;
+    right: 70px;
+    height: 38px;
+    padding: 0 10px;
+  }
+}
