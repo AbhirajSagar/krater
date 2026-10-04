@@ -194,7 +194,7 @@ class SparrowTextureManager {
     });
   }
 
-  loadTextureSet(texturePaths = {}) {
+  loadTextureSet(texturePaths = {}, onProgress = null) {
     const paths = {
       masksBC: texturePaths.masksBC || '/models/textures/StarSparrow_Masks_BC.png',
       logosCockpit: texturePaths.logosCockpit || '/models/textures/StarSparrow_Masks_LogosCockpit.png',
@@ -204,15 +204,37 @@ class SparrowTextureManager {
       normal: texturePaths.normal || '/models/textures/StarSparrow_Normal.png'
     };
 
-    return Promise.all([
-      this.loadTexture(paths.masksBC),
-      this.loadTexture(paths.logosCockpit),
-      this.loadTexture(paths.wearout),
-      this.loadTexture(paths.metallicSmoothness),
-      this.loadTexture(paths.emission),
-      this.loadTexture(paths.normal)
-    ]).then(([colors, logosCockpit, wearout, metallicSmoothness, emission, normal]) => {
-      return { colors, logosCockpit, wearout, metallicSmoothness, emission, normal };
+    const keys = Object.keys(paths);
+    let loadedCount = 0;
+    const totalCount = keys.length;
+
+    const promises = keys.map((key) => {
+      return this.loadTexture(paths[key]).then((tex) => {
+        loadedCount++;
+        if (onProgress) {
+          try {
+            onProgress({ loaded: loadedCount, total: totalCount, key, path: paths[key] });
+          } catch (e) {
+            console.error('Error in texture progress callback:', e);
+          }
+        }
+        return { key, tex };
+      });
+    });
+
+    return Promise.all(promises).then((results) => {
+      const res = {};
+      for (const item of results) {
+        res[item.key] = item.tex;
+      }
+      return {
+        colors: res.masksBC,
+        logosCockpit: res.logosCockpit,
+        wearout: res.wearout,
+        metallicSmoothness: res.metallicSmoothness,
+        emission: res.emission,
+        normal: res.normal
+      };
     });
   }
 }
@@ -303,7 +325,7 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
   material.defines = { USE_UV: '' };
 
   // Bind textures once loaded asynchronously
-  sparrowTextureManager.loadTextureSet(textures).then((tex) => {
+  const texturesReadyPromise = sparrowTextureManager.loadTextureSet(textures, options.onProgress).then((tex) => {
     uniforms.tColors.value = tex.colors;
     uniforms.tLogosCockpit.value = tex.logosCockpit;
     uniforms.tWearout.value = tex.wearout;
@@ -311,7 +333,10 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
     uniforms.tEmission.value = tex.emission;
     material.normalMap = tex.normal;
     material.needsUpdate = true;
+    return tex;
   });
+
+  material.texturesReadyPromise = texturesReadyPromise;
 
   material.onBeforeCompile = (shader) => {
     // Merge custom uniforms

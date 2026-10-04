@@ -48,7 +48,7 @@ export class SkyboxManager {
     this.listeners = [];
 
     // Try loading skyboxes.json if available to discover newly added skyboxes
-    this.loadManifest();
+    this.manifestPromise = this.loadManifest();
   }
 
   async loadManifest() {
@@ -67,8 +67,12 @@ export class SkyboxManager {
 
   /**
    * Pick and load a random skybox
+   * @param {Function} [onProgress]
    */
-  loadRandomSkybox() {
+  async loadRandomSkybox(onProgress = null) {
+    if (this.manifestPromise) {
+      await this.manifestPromise;
+    }
     if (this.skyboxes.length === 0) return Promise.reject(new Error('No skyboxes defined'));
 
     let newIndex;
@@ -80,7 +84,7 @@ export class SkyboxManager {
       } while (newIndex === this.currentIndex);
     }
 
-    return this.loadByIndex(newIndex);
+    return this.loadByIndex(newIndex, onProgress);
   }
 
   /**
@@ -94,18 +98,20 @@ export class SkyboxManager {
   /**
    * Load skybox by ID
    * @param {string} id
+   * @param {Function} [onProgress]
    */
-  loadById(id) {
+  loadById(id, onProgress = null) {
     const idx = this.skyboxes.findIndex(s => s.id === id);
     if (idx === -1) return Promise.reject(new Error(`Skybox ${id} not found`));
-    return this.loadByIndex(idx);
+    return this.loadByIndex(idx, onProgress);
   }
 
   /**
-   * Load skybox by index in list
+   * Load skybox by index in list with fine-grained face progress tracking
    * @param {number} index
+   * @param {Function} [onProgress]
    */
-  loadByIndex(index) {
+  loadByIndex(index, onProgress = null) {
     const skybox = this.skyboxes[index];
     if (!skybox) return Promise.reject(new Error(`Invalid skybox index ${index}`));
 
@@ -116,31 +122,59 @@ export class SkyboxManager {
       if (this.cache.has(skybox.id)) {
         const texture = this.cache.get(skybox.id);
         this.applyTexture(texture, skybox);
+        if (onProgress) {
+          onProgress({ loaded: 6, total: 6, face: 'cached', skybox });
+        }
         resolve(skybox);
         return;
       }
 
-      this.loader.setPath(skybox.path);
-      this.loader.load(
-        skybox.files,
-        (texture) => {
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.minFilter = THREE.LinearMipmapLinearFilter;
-          texture.magFilter = THREE.LinearFilter;
-          texture.generateMipmaps = true;
-          texture.needsUpdate = true;
-          this.cache.set(skybox.id, texture);
-          this.applyTexture(texture, skybox);
-          resolve(skybox);
-        },
-        undefined,
-        (err) => {
-          console.error(`Failed to load skybox ${skybox.id}:`, err);
-          // Graceful fallback to dark cosmic background
-          this.scene.background = new THREE.Color(0x05050d);
-          reject(err);
-        }
-      );
+      const files = skybox.files || ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'];
+      const texture = new THREE.CubeTexture();
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const imgLoader = new THREE.ImageLoader();
+      imgLoader.setPath(skybox.path);
+
+      let loaded = 0;
+      let hasError = false;
+
+      files.forEach((file, faceIdx) => {
+        imgLoader.load(
+          file,
+          (image) => {
+            if (hasError) return;
+            texture.images[faceIdx] = image;
+            loaded++;
+
+            if (onProgress) {
+              try {
+                onProgress({ loaded, total: files.length, face: file, faceIndex: faceIdx, skybox });
+              } catch (e) {
+                console.error('Error in skybox onProgress:', e);
+              }
+            }
+
+            if (loaded === files.length) {
+              texture.minFilter = THREE.LinearMipmapLinearFilter;
+              texture.magFilter = THREE.LinearFilter;
+              texture.generateMipmaps = true;
+              texture.needsUpdate = true;
+              this.cache.set(skybox.id, texture);
+              this.applyTexture(texture, skybox);
+              resolve(skybox);
+            }
+          },
+          undefined,
+          (err) => {
+            if (!hasError) {
+              hasError = true;
+              console.error(`Failed to load skybox face ${file} in ${skybox.id}:`, err);
+              this.scene.background = new THREE.Color(0x05050d);
+              reject(err);
+            }
+          }
+        );
+      });
     });
   }
 

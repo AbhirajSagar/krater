@@ -13,11 +13,14 @@ export class SpaceshipController {
    * @param {THREE.Scene} scene
    * @param {THREE.PerspectiveCamera} camera
    * @param {HTMLElement} domElement
+   * @param {object} [options]
    */
-  constructor(scene, camera, domElement) {
+  constructor(scene, camera, domElement, options = {}) {
     this.scene = scene;
     this.camera = camera;
     this.domElement = domElement;
+    this.options = options;
+    this.enabled = options.enabled !== undefined ? options.enabled : false;
     this.cameraShake = 0.0;
     this.cameraShakeDecay = 12.0;
     this.cameraShakeStrength = 0.22;
@@ -124,12 +127,26 @@ export class SpaceshipController {
     this.setupInputListeners();
 
     // Load initial StarSparrow ship
-    this.selectShip(0);
+    this.initialShipPromise = null;
+    if (options.autoLoad !== false) {
+      this.initialShipPromise = this.selectShip(0, options.onProgress);
+    }
+  }
+
+  async init(onProgress = null) {
+    if (!this.currentShipMesh) {
+      await this.selectShip(0, onProgress);
+    } else if (this.initialShipPromise) {
+      await this.initialShipPromise;
+    }
+    this.enabled = true;
+    return this;
   }
 
   setupInputListeners() {
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
+      if (!this.enabled) return;
 
       // Enter or F fires laser weapons
       if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'KeyF') {
@@ -198,6 +215,7 @@ export class SpaceshipController {
     });
 
     window.addEventListener('mousedown', (e) => {
+      if (!this.enabled) return;
       if (e.target && e.target.closest && e.target.closest('#touch-controls')) {
         return;
       }
@@ -212,6 +230,7 @@ export class SpaceshipController {
     });
 
     window.addEventListener('wheel', (e) => {
+      if (!this.enabled) return;
       if (this.cameraMode === 2) {
         this.orbitRadius = Math.max(2.5, Math.min(30.0, this.orbitRadius + e.deltaY * 0.01));
       }
@@ -252,7 +271,7 @@ export class SpaceshipController {
     }
   }
 
-  async selectShip(index) {
+  async selectShip(index, onProgress = null) {
     if (index < 0 || index >= this.shipConfigs.length) return;
     const config = this.shipConfigs[index];
     this.currentShipIndex = index;
@@ -279,8 +298,14 @@ export class SpaceshipController {
     // Check model cache
     let cached = this.loadedShipsCache.get(config.id);
     if (!cached) {
+      if (onProgress) {
+        onProgress({ phase: 'model_start', shipName: config.name });
+      }
       const loader = new FBXLoader();
       const fbx = await loader.loadAsync(config.model);
+      if (onProgress) {
+        onProgress({ phase: 'model_loaded', shipName: config.name });
+      }
 
       // Normalize size and center
       const initialBox = new THREE.Box3().setFromObject(fbx);
@@ -304,7 +329,18 @@ export class SpaceshipController {
       container.updateMatrixWorld(true);
 
       // Apply authentic StarSparrow shader material using full ship config (colors, textures, wearout)
-      const sparrowMat = createStarSparrowMaterial(config);
+      const sparrowMat = createStarSparrowMaterial(config, {
+        onProgress: (texProgress) => {
+          if (onProgress) {
+            onProgress({ phase: 'texture', shipName: config.name, ...texProgress });
+          }
+        }
+      });
+
+      // Await all textures being downloaded and bound
+      if (sparrowMat.texturesReadyPromise) {
+        await sparrowMat.texturesReadyPromise;
+      }
 
       fbx.traverse((child) => {
         if (child.isMesh) {
@@ -333,6 +369,9 @@ export class SpaceshipController {
     if (config.thrusters && config.thrusters[0] && this.sparkSystem) {
       this.sparkSystem.setColor(config.thrusters[0].color);
     }
+
+    // Position camera once immediately so initial frame is correctly oriented
+    this.updateCamera(0.016);
   }
 
   cycleShip() {
@@ -416,6 +455,7 @@ export class SpaceshipController {
   }
 
   handleInput(dt) {
+    if (!this.enabled) return;
     const k = this.keys;
 
     // Boost: Shift or Space OR touch boost button

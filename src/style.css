@@ -38,6 +38,9 @@ html, body {
   height: 100vh;
   touch-action: none;
   z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
 }
 
 /* Display only on touch screens / small screens */
@@ -45,6 +48,11 @@ html, body {
   #touch-controls {
     display: block;
   }
+}
+
+#touch-controls.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .touch-joystick-zone {
@@ -104,7 +112,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.25s ease;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.crosshair-container.visible {
+  opacity: 1;
 }
 
 .crosshair-hud {
@@ -237,4 +250,79 @@ html, body {
 /* Firing Recoil Kick State */
 .crosshair-container.firing .crosshair-hud {
   transform: scale(1.25);
+}
+
+/* =========================================================
+   MINIMAL GLASSMORPHIC LOADING OVERLAY
+   ========================================================= */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  background-color: #030408;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.6s ease;
+}
+
+.loading-screen.fade-out {
+  opacity: 0;
+  transform: scale(1.02);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.loading-screen.hidden {
+  display: none !important;
+}
+
+/* Centered Glassmorphic Card */
+.glass-card {
+  width: 260px;
+  max-width: 82vw;
+  padding: 30px 32px 34px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+/* Minimal Percentage Number */
+.glass-percent {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+  font-size: 36px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  line-height: 1;
+}
+
+/* Minimal Loading Bar */
+.glass-bar-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.glass-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+  transition: width 0.15s ease-out;
 }
