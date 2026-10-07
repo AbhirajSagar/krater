@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sounds } from './SoundManager.js';
 
 // Reusable static calculation vectors to eliminate garbage collection in collision loops
 const _seg = new THREE.Vector3();
@@ -53,6 +54,8 @@ export class AsteroidField {
 
     // 6. Pre-allocated Fragment pool (48 fragments ready in scene, zero runtime allocations)
     this.setupFragmentPool(48);
+
+    this.onAsteroidDestroyed = null;
 
     // 7. Populate initial asteroids
     const spawnRadiusMin = 40;
@@ -455,7 +458,7 @@ export class AsteroidField {
 
       const distSq = _closest.distanceToSquared(aPos);
       if (distSq <= a.boundingRadiusSq) {
-        this.handleHit(a, _closest, laserColorHex);
+        this.handleHit(a, _closest, laserColorHex, i);
         return true;
       }
     }
@@ -486,12 +489,15 @@ export class AsteroidField {
     return false;
   }
 
-  handleHit(a, hitPoint, laserColorHex) {
+  handleHit(a, hitPoint, laserColorHex, index = -1) {
     a.health -= 1;
     this.spawnImpactSparks(hitPoint, laserColorHex);
 
     if (a.health <= 0) {
       this.explodeAsteroid(a);
+      if (this.onAsteroidDestroyed && index >= 0) {
+        this.onAsteroidDestroyed(index, a.mesh.position.toArray());
+      }
     }
   }
 
@@ -500,7 +506,14 @@ export class AsteroidField {
     frag.mesh.visible = false;
     this.spawnImpactSparks(hitPoint, laserColorHex);
     this.spawnExplosionSparks(frag.mesh.position, frag.effectiveRadius);
+    sounds.playHit();
     this._meshesNeedUpdate = true;
+  }
+
+  explodeAsteroidByIndex(index) {
+    if (this.asteroids && this.asteroids[index]) {
+      this.explodeAsteroid(this.asteroids[index]);
+    }
   }
 
   /**
@@ -510,6 +523,8 @@ export class AsteroidField {
     if (a.isDestroyed) return;
     a.isDestroyed = true;
     a.mesh.visible = false; // Fast toggle instead of group.remove to preserve scene graph
+
+    sounds.playExplosion(0.75);
 
     // Trigger visual effects
     this.spawnExplosionSparks(a.mesh.position, a.effectiveRadius);

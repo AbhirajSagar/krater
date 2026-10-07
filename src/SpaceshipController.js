@@ -3,6 +3,7 @@ import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { createStarSparrowMaterial, SPARROW_THEMES, THEME_KEYS } from './StarSparrowMaterial.js';
 import { SPACESHIP_CONFIGS, getSpaceshipConfig } from './spaceshipConfig.js';
 import { ThrusterFlame, ThrusterSparkSystem } from './ThrusterVFX.js';
+import { sounds } from './SoundManager.js';
 
 // Static vectors to prevent allocations in projectile updates
 const _pOldPos = new THREE.Vector3();
@@ -122,6 +123,24 @@ export class SpaceshipController {
     this._aimRaycaster = new THREE.Raycaster();
     this._aimRaycaster.far = 800;
     this._crosshairTimer = null;
+
+    // Combat Health & Shield System
+    this.health = 100.0;
+    this.maxHealth = 100.0;
+    this.shield = 100.0;
+    this.maxShield = 100.0;
+    this.isDestroyed = false;
+    this.invulnerableTimer = 0.0;
+    this.shieldRegenDelay = 4.0;
+    this.shieldRegenTimer = 0.0;
+    this.shieldRegenRate = 22.0;
+
+    // Multiplayer Combat Hooks
+    this.remotePlayersManager = null;
+    this.onLaserFired = null;
+    this.onLaserHitEnemy = null;
+    this.onDamaged = null;
+    this.onDestroyed = null;
 
     // Event listeners
     this.setupInputListeners();
@@ -366,8 +385,10 @@ export class SpaceshipController {
       this.sparkSystem.setColor(config.thrusters[0].color);
     }
 
-    // Position camera once immediately so initial frame is correctly oriented
-    this.updateCamera(0.016);
+    // Position camera once immediately if enabled
+    if (this.enabled) {
+      this.updateCamera(0.016);
+    }
   }
 
   cycleShip() {
@@ -378,6 +399,12 @@ export class SpaceshipController {
   cycleColorTheme() {
     this.currentThemeIndex = (this.currentThemeIndex + 1) % THEME_KEYS.length;
     const themeKey = THEME_KEYS[this.currentThemeIndex];
+    this.setColorTheme(themeKey);
+  }
+
+  setColorTheme(themeKey) {
+    if (!SPARROW_THEMES[themeKey]) return;
+    this.currentThemeKey = themeKey;
     if (this.currentShipMaterial && this.currentShipMaterial.setTheme) {
       this.currentShipMaterial.setTheme(themeKey);
       const theme = SPARROW_THEMES[themeKey];
@@ -433,11 +460,32 @@ export class SpaceshipController {
     if (dt <= 0) return;
     dt = Math.min(dt, 0.1); // Guard against tab freeze spikes
 
-    this.handleInput(dt);
-    this.updatePhysics(dt);
+    // Shield Regeneration
+    if (!this.isDestroyed && this.shield < this.maxShield) {
+      this.shieldRegenTimer += dt;
+      if (this.shieldRegenTimer >= this.shieldRegenDelay) {
+        this.shield = Math.min(this.maxShield, this.shield + this.shieldRegenRate * dt);
+      }
+    }
+
+    if (this.invulnerableTimer > 0) {
+      this.invulnerableTimer -= dt;
+    }
+
+    if (!this.isDestroyed) {
+      this.handleInput(dt);
+      this.updatePhysics(dt);
+    } else {
+      // Natural deceleration when destroyed
+      this.currentSpeed *= Math.pow(0.92, dt * 60);
+      this.root.position.addScaledVector(this.velocity, dt * 0.3);
+    }
+
     this.updateThrusters(dt);
-    this.updateCamera(dt);
-    this.updateCrosshairAim();
+    if (this.enabled) {
+      this.updateCamera(dt);
+      this.updateCrosshairAim();
+    }
     if (this.sparkSystem) {
       this.sparkSystem.update(dt);
     }
@@ -852,6 +900,11 @@ export class SpaceshipController {
 
       this.activeProjectiles.push(p);
     }
+
+    sounds.playLaser();
+    if (this.onLaserFired) {
+      this.onLaserFired({ points, dir: forwardDir.toArray(), speed: 160.0 });
+    }
   }
 
   setupLaserPool(size = 48) {
@@ -926,6 +979,20 @@ export class SpaceshipController {
       p.group.position.addScaledVector(p.dir, p.speed * dt);
       _pNewPos.copy(p.group.position);
 
+      // Check collision against remote enemy players
+      if (this.remotePlayersManager) {
+        const hitInfo = this.remotePlayersManager.checkLaserHit(_pOldPos, _pNewPos);
+        if (hitInfo) {
+          p.active = false;
+          p.group.visible = false;
+          this.activeProjectiles.splice(i, 1);
+          if (this.onLaserHitEnemy) {
+            this.onLaserHitEnemy(hitInfo.player, hitInfo.hitPoint, 25);
+          }
+          continue;
+        }
+      }
+
       // Check collision against asteroids
       if (this.asteroidField) {
         const hit = this.asteroidField.checkLaserHit(_pOldPos, _pNewPos, p.colorHex);
@@ -943,5 +1010,73 @@ export class SpaceshipController {
         this.activeProjectiles.splice(i, 1);
       }
     }
+  }
+
+  setRemotePlayersManager(mgr) {
+    this.remotePlayersManager = mgr;
+  }
+
+  takeDamage(amount, attackerId = null, hitPoint = null) {
+    if (this.isDestroyed || this.invulnerableTimer > 0) return;
+
+    this.shieldRegenTimer = 0.0;
+    this.triggerCameraShake(0.35);
+
+    if (this.shield > 0) {
+      sounds.playShieldHit();
+      if (amount <= this.shield) {
+        this.shield -= amount;
+      } else {
+        const leftover = amount - this.shield;
+        this.shield = 0;
+        this.health = Math.max(0, this.health - leftover);
+        sounds.playHit();
+      }
+    } else {
+      this.health = Math.max(0, this.health - amount);
+      sounds.playHit();
+    }
+
+    if (this.onDamaged) {
+      this.onDamaged(this.shield, this.health, attackerId);
+    }
+
+    if (this.health <= 0 && !this.isDestroyed) {
+      this.isDestroyed = true;
+      sounds.playExplosion(1.5);
+      this.triggerCameraShake(0.85);
+      this.visualHolder.visible = false;
+
+      if (this.asteroidField) {
+        this.asteroidField.spawnExplosionSparks(this.root.position, 6.0);
+        this.asteroidField.spawnShockwave(this.root.position, 8.0);
+      }
+
+      if (this.onDestroyed) {
+        this.onDestroyed(attackerId);
+      }
+    }
+  }
+
+  respawn(position = null) {
+    this.isDestroyed = false;
+    this.health = this.maxHealth;
+    this.shield = this.maxShield;
+    this.invulnerableTimer = 3.0;
+    this.visualHolder.visible = true;
+    this.currentSpeed = 0;
+    this.targetSpeed = 0;
+    this.velocity.set(0, 0, 0);
+    this.angularVelocity.set(0, 0, 0);
+
+    if (position) {
+      this.root.position.copy(position);
+    } else {
+      const angle = Math.random() * Math.PI * 2;
+      const r = 90 + Math.random() * 80;
+      this.root.position.set(Math.cos(angle) * r, (Math.random() - 0.5) * 40, Math.sin(angle) * r);
+    }
+
+    sounds.playClick();
   }
 }
