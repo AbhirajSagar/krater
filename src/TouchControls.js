@@ -1,3 +1,22 @@
+/**
+ * TouchControls.js
+ * High-performance mobile touch controls for 3D space combat dogfights.
+ * - Left Screen: Floating dynamic joystick for 6-DoF pitch, yaw, roll banking & propulsion throttle.
+ * - Right Screen: Semi-automatic weapon fire button + Dedicated afterburner boost button + Screen-wide hold boost.
+ */
+
+export function detectTouchDevice() {
+  const isTouch = (
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia('(pointer: coarse)').matches
+  );
+  if (isTouch && document.body) {
+    document.body.classList.add('has-touch');
+  }
+  return isTouch;
+}
+
 export class TouchControls {
   /**
    * @param {import('./SpaceshipController.js').SpaceshipController} spaceship
@@ -18,32 +37,69 @@ export class TouchControls {
     this.joystickPointerId = null;
     this.joystickCenter = { x: 0, y: 0 };
 
-    // Right-side press-and-hold boost state
+    // Right-side screen-wide press-and-hold boost state
     this.boostPointerId = null;
 
-    // Semi-automatic shoot button
+    // Dedicated boost button state
+    this.boostZone = document.getElementById('touch-boost-zone');
+    this.boostBtn = document.getElementById('btn-touch-boost');
+    this.boostBtnPointerId = null;
+
+    // Semi-automatic shoot button state
     this.shootZone = document.getElementById('touch-shoot-zone');
     this.shootBtn = document.getElementById('btn-touch-shoot');
     this.shootPointerId = null;
 
-    this.initShootButtonDOM();
+    detectTouchDevice();
+    this.initDOM();
     this.setupControls();
+
+    // Auto-detect touch on any first touch event anywhere on screen
+    window.addEventListener('touchstart', () => {
+      detectTouchDevice();
+    }, { once: true, passive: true });
   }
 
-  initShootButtonDOM() {
+  initDOM() {
     if (!this.container) return;
 
-    if (!this.shootZone) {
-      const zone = document.createElement('div');
-      zone.id = 'touch-shoot-zone';
-      zone.className = 'touch-shoot-zone';
-      zone.innerHTML = `
-        <button id="btn-touch-shoot" class="touch-shoot-btn" aria-label="Fire Weapons" title="Tap to Fire">
-          <div class="shoot-btn-core"></div>
+    // Ensure Boost button exists in DOM
+    if (!this.boostBtn) {
+      let boostZone = document.getElementById('touch-boost-zone');
+      if (!boostZone) {
+        boostZone = document.createElement('div');
+        boostZone.id = 'touch-boost-zone';
+        boostZone.className = 'touch-boost-zone';
+        this.container.appendChild(boostZone);
+      }
+      boostZone.innerHTML = `
+        <button id="btn-touch-boost" class="touch-boost-btn" aria-label="Engage Boost" title="Hold to Boost">
+          <svg class="boost-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span class="touch-btn-label boost-label">BOOST</span>
         </button>
       `;
-      this.container.appendChild(zone);
-      this.shootZone = zone;
+      this.boostZone = boostZone;
+      this.boostBtn = document.getElementById('btn-touch-boost');
+    }
+
+    // Ensure Shoot button exists in DOM
+    if (!this.shootBtn) {
+      let shootZone = document.getElementById('touch-shoot-zone');
+      if (!shootZone) {
+        shootZone = document.createElement('div');
+        shootZone.id = 'touch-shoot-zone';
+        shootZone.className = 'touch-shoot-zone';
+        this.container.appendChild(shootZone);
+      }
+      shootZone.innerHTML = `
+        <button id="btn-touch-shoot" class="touch-shoot-btn" aria-label="Fire Weapons" title="Tap to Fire">
+          <div class="shoot-btn-core"></div>
+          <span class="touch-btn-label fire-label">FIRE</span>
+        </button>
+      `;
+      this.shootZone = shootZone;
       this.shootBtn = document.getElementById('btn-touch-shoot');
     }
   }
@@ -59,7 +115,7 @@ export class TouchControls {
 
     window.addEventListener('blur', () => this.resetAll());
 
-    // Setup Shoot button listeners (strictly semi-automatic: tap again and again)
+    // Setup Shoot button listeners (strictly semi-automatic: tap to fire volley)
     if (this.shootBtn) {
       this.shootBtn.addEventListener('pointerdown', (e) => {
         e.stopPropagation();
@@ -67,7 +123,7 @@ export class TouchControls {
         this.shootPointerId = e.pointerId;
         this.shootBtn.classList.add('active');
 
-        // Single volley fire per tap
+        // Fire single salvo per tap
         if (this.ship && this.ship.enabled) {
           this.ship.fireWeapons();
         }
@@ -85,7 +141,7 @@ export class TouchControls {
       });
     }
 
-    // Tapping outer shoot zone also triggers a single shot
+    // Outer shoot zone tap also triggers weapon fire
     if (this.shootZone && this.shootBtn) {
       this.shootZone.addEventListener('pointerdown', (e) => {
         if (e.target !== this.shootBtn && !this.shootBtn.contains(e.target)) {
@@ -101,19 +157,56 @@ export class TouchControls {
         }
       });
     }
+
+    // Setup Dedicated Boost button listeners (hold to engage afterburners)
+    if (this.boostBtn) {
+      this.boostBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.boostBtnPointerId = e.pointerId;
+        this.boostBtn.classList.add('active');
+        this.setBoost(true);
+      });
+
+      this.boostBtn.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        this.boostBtnPointerId = null;
+        this.boostBtn.classList.remove('active');
+        this.setBoost(false);
+      });
+
+      this.boostBtn.addEventListener('pointercancel', (e) => {
+        this.boostBtnPointerId = null;
+        this.boostBtn.classList.remove('active');
+        this.setBoost(false);
+      });
+    }
+
+    // Outer boost zone tap also triggers boost
+    if (this.boostZone && this.boostBtn) {
+      this.boostZone.addEventListener('pointerdown', (e) => {
+        if (e.target !== this.boostBtn && !this.boostBtn.contains(e.target)) {
+          e.stopPropagation();
+          e.preventDefault();
+          this.boostBtnPointerId = e.pointerId;
+          this.boostBtn.classList.add('active');
+          this.setBoost(true);
+        }
+      });
+    }
   }
 
   onPointerDown(e) {
-    // 1. Ignore if user is interacting with options menu button or dialog
-    if (e.target && e.target.closest && e.target.closest('#btn-options-toggle, #options-dialog, .options-dialog-backdrop')) {
+    // 1. Ignore if user is interacting with options menu button, dialog, or UI cards
+    if (e.target && e.target.closest && e.target.closest('#btn-options-toggle, #options-dialog, .options-dialog-backdrop, .hud-chat-card, .btn-primary, .btn-ghost')) {
       return;
     }
     if (e.clientX > window.innerWidth - 75 && e.clientY < 75) {
       return;
     }
 
-    // 2. Ignore if pointer is on the shoot button (handled separately by shootBtn listener)
-    if (e.target && e.target.closest && e.target.closest('#btn-touch-shoot, #touch-shoot-zone')) {
+    // 2. Ignore if pointer is on shoot or boost button (handled separately by their listeners)
+    if (e.target && e.target.closest && e.target.closest('#btn-touch-shoot, #touch-shoot-zone, #btn-touch-boost, #touch-boost-zone')) {
       return;
     }
 
@@ -129,15 +222,18 @@ export class TouchControls {
         this.zone.style.left = `${e.clientX}px`;
         this.zone.style.top = `${e.clientY}px`;
         this.knob.style.transform = 'translate(0px, 0px)';
-        this.zone.classList.add('visible');
+        this.zone.classList.add('active');
 
         this.updateJoystick(e.clientX, e.clientY);
       }
     } else {
-      // --- RIGHT SIDE (ANYWHERE EXCEPT FIRE BUTTON): PRESS & HOLD BOOST ---
+      // --- RIGHT SIDE (ANYWHERE EXCEPT BUTTONS): PRESS & HOLD BOOST ---
       if (this.boostPointerId === null) {
         this.boostPointerId = e.pointerId;
         this.setBoost(true);
+        if (this.boostBtn) {
+          this.boostBtn.classList.add('active');
+        }
       }
     }
   }
@@ -152,11 +248,15 @@ export class TouchControls {
     // Release Floating Joystick
     if (e.pointerId === this.joystickPointerId) {
       this.joystickPointerId = null;
-      this.zone.classList.remove('visible');
+      this.zone.classList.remove('active');
+      this.zone.style.left = '';
+      this.zone.style.top = '';
       this.knob.style.transform = 'translate(0px, 0px)';
-      this.ship.touchInput.yaw = 0;
-      this.ship.touchInput.pitch = 0;
-      this.ship.touchInput.throttle = 0;
+      if (this.ship) {
+        this.ship.touchInput.yaw = 0;
+        this.ship.touchInput.pitch = 0;
+        this.ship.touchInput.throttle = 0;
+      }
     }
 
     // Release Shoot Button
@@ -167,9 +267,21 @@ export class TouchControls {
       }
     }
 
-    // Release Right-Side Boost: immediate stop when lifting thumb
+    // Release Dedicated Boost Button
+    if (e.pointerId === this.boostBtnPointerId) {
+      this.boostBtnPointerId = null;
+      if (this.boostBtn) {
+        this.boostBtn.classList.remove('active');
+      }
+      this.setBoost(false);
+    }
+
+    // Release Screen-Wide Boost: immediate stop when lifting thumb
     if (e.pointerId === this.boostPointerId) {
       this.boostPointerId = null;
+      if (this.boostBtn && this.boostBtnPointerId === null) {
+        this.boostBtn.classList.remove('active');
+      }
       this.setBoost(false);
     }
   }
@@ -196,35 +308,43 @@ export class TouchControls {
     const ny = dy / this.maxRadius; // -1 to 1 (up to down)
     const deflection = Math.min(1.0, dist / this.maxRadius);
 
-    // Left/Right -> Yaw & Bank (-1 to 1)
-    this.ship.touchInput.yaw = -nx;
+    if (this.ship) {
+      // Left/Right -> Yaw & Bank (-1 to 1)
+      this.ship.touchInput.yaw = -nx;
 
-    // Up/Down -> Pitch (-1 to 1)
-    // Up (ny < 0) = pitch down / dive, Down (ny > 0) = pitch up / climb
-    this.ship.touchInput.pitch = -ny;
+      // Up/Down -> Pitch (-1 to 1)
+      // Up (ny < 0) = pitch down / dive, Down (ny > 0) = pitch up / climb
+      this.ship.touchInput.pitch = -ny;
 
-    // Throttle:
-    // If pulling straight down hard (ny > 0.65 and |nx| < 0.45): Reverse / Airbrake
-    if (ny > 0.65 && Math.abs(nx) < 0.45) {
-      this.ship.touchInput.throttle = -0.7;
-    } else if (deflection > 0.12) {
-      // Pushing in any forward/steering direction engages propulsion
-      this.ship.touchInput.throttle = Math.min(1.0, 0.45 + 0.55 * deflection);
-    } else {
-      this.ship.touchInput.throttle = 0;
+      // Throttle:
+      // If pulling straight down hard (ny > 0.65 and |nx| < 0.45): Reverse / Airbrake
+      if (ny > 0.65 && Math.abs(nx) < 0.45) {
+        this.ship.touchInput.throttle = -0.7;
+      } else if (deflection > 0.12) {
+        // Pushing in any forward/steering direction engages propulsion
+        this.ship.touchInput.throttle = Math.min(1.0, 0.45 + 0.55 * deflection);
+      } else {
+        this.ship.touchInput.throttle = 0;
+      }
     }
   }
 
   resetAll() {
     this.joystickPointerId = null;
     if (this.zone) {
-      this.zone.classList.remove('visible');
+      this.zone.classList.remove('active');
+      this.zone.style.left = '';
+      this.zone.style.top = '';
     }
     if (this.knob) {
       this.knob.style.transform = 'translate(0px, 0px)';
     }
 
     this.boostPointerId = null;
+    this.boostBtnPointerId = null;
+    if (this.boostBtn) {
+      this.boostBtn.classList.remove('active');
+    }
     this.setBoost(false);
 
     this.shootPointerId = null;

@@ -5,7 +5,7 @@ import { SkyboxManager } from './SkyboxManager.js';
 import { SpaceshipController } from './SpaceshipController.js';
 import { SpaceDust } from './SpaceDust.js';
 import { AsteroidField } from './AsteroidField.js';
-import { TouchControls } from './TouchControls.js';
+import { TouchControls, detectTouchDevice } from './TouchControls.js';
 import { OptionsMenu } from './OptionsMenu.js';
 import { GameplayRecorder } from './GameplayRecorder.js';
 
@@ -97,6 +97,10 @@ let lobbyUI = null;
 
 let crosshairContainer = null;
 let touchControlsContainer = null;
+let touchControls = null;
+
+// Initial touch capability check
+detectTouchDevice();
 
 // Game State Switching Functions & Floating Menu Layout
 function updateMenuLayout() {
@@ -130,6 +134,7 @@ function enterMainMenu(advanceSkybox = false) {
   if (lobbyUI) lobbyUI.showMenu();
   if (crosshairContainer) crosshairContainer.classList.remove('visible');
   if (touchControlsContainer) touchControlsContainer.classList.remove('visible');
+  if (touchControls) touchControls.resetAll();
   if (remotePlayersManager) remotePlayersManager.clear();
   if (asteroidField) asteroidField.reseed('spacegame_menu_sector');
 
@@ -162,6 +167,9 @@ function startBattle(room = null, isSolo = false) {
 
   // Keep crosshair hidden during gameplay per user specification
   if (crosshairContainer) crosshairContainer.classList.remove('visible');
+
+  // Reveal touch controls during battle on mobile and touchscreens
+  if (touchControlsContainer) touchControlsContainer.classList.add('visible');
 
   // Reset local stats
   localKills = 0;
@@ -532,6 +540,7 @@ function bindNetworkEvents() {
 
     spaceship.onDestroyed = (killerId) => {
       localDeaths += 1;
+      if (touchControls) touchControls.resetAll();
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
         client.relay('PLAYER_KILLED', { victimId: client.playerId, killerId });
         client.updatePlayerState({ deaths: localDeaths, isDestroyed: true });
@@ -633,7 +642,7 @@ async function initPipeline() {
   }
 
   // Touch Controls
-  new TouchControls(spaceship, skyboxManager);
+  touchControls = new TouchControls(spaceship, skyboxManager);
 
   // Phase 5: Multiplayer Client & Remote Opponents
   client = new MultiplayerClient();

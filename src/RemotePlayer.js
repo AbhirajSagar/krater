@@ -2,7 +2,7 @@
  * RemotePlayer.js
  * Represents a network opponent spaceship in the 3D space battlefield.
  * Features smooth position/rotation interpolation, authentic StarSparrow visuals,
- * active thrusters & sparks, 3D dynamic overhead vitals nameplate, and shield bubble.
+ * active thrusters & sparks, and shield bubble.
  */
 
 import * as THREE from 'three';
@@ -80,9 +80,6 @@ export class RemotePlayer {
 
     // Shield Dome Mesh (flashes on impact or respawn invulnerability)
     this.setupShieldDome();
-
-    // 3D Overhead Nameplate Billboard
-    this.setupNameplate();
 
     // Load Ship Mesh
     this.modelInstance = null;
@@ -235,97 +232,7 @@ export class RemotePlayer {
     this.shieldMesh.material.opacity = 0.55;
   }
 
-  setupNameplate() {
-    this.nameplateCanvas = document.createElement('canvas');
-    this.nameplateCanvas.width = 384;
-    this.nameplateCanvas.height = 128;
-    this.nameplateCtx = this.nameplateCanvas.getContext('2d');
 
-    this.nameplateTexture = new THREE.CanvasTexture(this.nameplateCanvas);
-    this.nameplateTexture.minFilter = THREE.LinearFilter;
-
-    const spriteMat = new THREE.SpriteMaterial({
-      map: this.nameplateTexture,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false
-    });
-
-    this.nameplateSprite = new THREE.Sprite(spriteMat);
-    this.nameplateSprite.position.set(0, 3.8, 0);
-    this.nameplateSprite.scale.set(6.0, 2.0, 1.0);
-    this.root.add(this.nameplateSprite);
-
-    this.lastDrawnHealth = -1;
-    this.lastDrawnShield = -1;
-    this.lastDrawnDist = -1;
-    this.updateNameplate(0);
-  }
-
-  updateNameplate(distance = 0) {
-    const distMeters = Math.round(distance);
-    // Draw only if values changed to minimize GPU texture uploads
-    if (this.lastDrawnHealth === this.health &&
-        this.lastDrawnShield === this.shield &&
-        this.lastDrawnDist === distMeters) {
-      return;
-    }
-
-    this.lastDrawnHealth = this.health;
-    this.lastDrawnShield = this.shield;
-    this.lastDrawnDist = distMeters;
-
-    const ctx = this.nameplateCtx;
-    const w = this.nameplateCanvas.width;
-    const h = this.nameplateCanvas.height;
-
-    ctx.clearRect(0, 0, w, h);
-
-    // Semi-transparent sci-fi backing card
-    ctx.fillStyle = 'rgba(6, 12, 24, 0.72)';
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(8, 8, w - 16, h - 16, 10);
-    ctx.fill();
-    ctx.stroke();
-
-    // Callsign & Distance
-    ctx.font = 'bold 26px "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(this.name.toUpperCase(), 24, 38);
-
-    ctx.font = 'bold 20px "Segoe UI", system-ui, sans-serif';
-    ctx.fillStyle = '#38bdf8';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${distMeters}m`, w - 24, 38);
-
-    // Shield Bar (Cyan)
-    const barX = 24;
-    const barW = w - 48;
-    const barH = 12;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(barX, 64, barW, barH);
-    const shieldPct = Math.max(0, Math.min(1, this.shield / this.maxShield));
-    if (shieldPct > 0) {
-      ctx.fillStyle = '#00e5ff';
-      ctx.fillRect(barX, 64, barW * shieldPct, barH);
-    }
-
-    // Hull / Health Bar (Green -> Orange -> Red)
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(barX, 84, barW, barH);
-    const healthPct = Math.max(0, Math.min(1, this.health / this.maxHealth));
-    if (healthPct > 0) {
-      ctx.fillStyle = healthPct > 0.5 ? '#22c55e' : healthPct > 0.25 ? '#f59e0b' : '#ef4444';
-      ctx.fillRect(barX, 84, barW * healthPct, barH);
-    }
-
-    this.nameplateTexture.needsUpdate = true;
-  }
 
   /**
    * Applies received network transform packet
@@ -425,25 +332,12 @@ export class RemotePlayer {
       }
     }
 
-    // Update billboard nameplate distance
-    if (cameraPosition) {
-      const dist = this.root.position.distanceTo(cameraPosition);
-      this.updateNameplate(dist);
-
-      // Scale nameplate slightly with distance so it remains legible
-      const scaleFactor = Math.max(1.0, Math.min(3.5, dist / 40.0));
-      this.nameplateSprite.scale.set(6.0 * scaleFactor, 2.0 * scaleFactor, 1.0);
-      this.nameplateSprite.position.set(0, 3.8 * scaleFactor, 0);
-    }
   }
 
   dispose() {
     this.scene.remove(this.root);
     for (const t of this.activeThrusters) {
       t.dispose();
-    }
-    if (this.nameplateTexture) {
-      this.nameplateTexture.dispose();
     }
   }
 }

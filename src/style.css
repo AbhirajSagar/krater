@@ -33,7 +33,7 @@ html, body {
 }
 
 /* =========================================================
-   SINGLE BARELY VISIBLE WHITE TRANSPARENT JOYSTICK
+   SCI-FI COMBAT TOUCH CONTROLS (JOYSTICK, BOOST & WEAPONS)
    ========================================================= */
 
 #touch-controls {
@@ -44,17 +44,21 @@ html, body {
   width: 100vw;
   height: 100vh;
   touch-action: none;
-  z-index: 50;
+  z-index: 75;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.35s ease;
 }
 
-/* Display only on mobile touch screens */
-@media (pointer: coarse) and (hover: none) {
+/* Display on touchscreens, mobile viewports, or when touch is detected */
+@media (pointer: coarse), (hover: none), (max-width: 1024px) {
   #touch-controls {
     display: block;
   }
+}
+
+body.has-touch #touch-controls {
+  display: block;
 }
 
 #touch-controls.visible {
@@ -62,87 +66,101 @@ html, body {
   pointer-events: auto;
 }
 
+/* Left-hand side Floating / Resting Joystick Zone */
 .touch-joystick-zone {
   position: absolute;
-  width: 110px;
-  height: 110px;
+  top: calc(100vh - 105px);
+  left: 95px;
+  width: 120px;
+  height: 120px;
   touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, -50%) scale(0.85);
-  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0.42;
+  transform: translate(-50%, -50%) scale(0.95);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: transform, opacity, left, top;
-  z-index: 52;
+  z-index: 76;
 }
 
-.touch-joystick-zone.visible {
-  opacity: 0.65;
-  transform: translate(-50%, -50%) scale(1);
+.touch-joystick-zone.active {
+  opacity: 0.9;
+  transform: translate(-50%, -50%) scale(1.05);
 }
 
-/* Slightly transparent white base */
+/* Minimal glassmorphic sci-fi joystick base */
 .joystick-base {
   position: relative;
-  width: 95px;
-  height: 95px;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, rgba(8, 12, 22, 0.45) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 0 14px rgba(255, 255, 255, 0.05);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Slightly transparent white knob */
+.touch-joystick-zone.active .joystick-base {
+  border-color: rgba(0, 240, 255, 0.45);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.25), inset 0 0 16px rgba(0, 240, 255, 0.12);
+}
+
+/* Responsive joystick knob */
 .joystick-knob {
   position: absolute;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 100%);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   pointer-events: none;
   transform: translate(0px, 0px);
-  transition: transform 0.04s ease-out;
+  transition: transform 0.04s ease-out, border-color 0.2s ease, box-shadow 0.2s ease;
   will-change: transform;
 }
 
-/* Right-hand side shoot zone */
+.touch-joystick-zone.active .joystick-knob {
+  border-color: #00f0ff;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(0, 240, 255, 0.12) 100%);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Right-hand side Weapons Shoot Zone */
 .touch-shoot-zone {
   position: absolute;
-  bottom: 35px;
-  right: 35px;
-  width: 100px;
-  height: 100px;
+  bottom: 30px;
+  right: 30px;
+  width: 90px;
+  height: 90px;
   touch-action: none;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: auto;
-  z-index: 52;
+  z-index: 78;
 }
 
-/* Slightly transparent minimal glass shoot button (no crosshair icon) */
+/* Translucent glass shoot button */
 .touch-shoot-btn {
   position: relative;
-  width: 68px;
-  height: 68px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25),
-              inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(10, 15, 26, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -151,7 +169,8 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  opacity: 0.6;
+  opacity: 0.85;
+  gap: 3px;
   transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1),
               background 0.15s ease,
               border-color 0.15s ease,
@@ -159,47 +178,159 @@ html, body {
               box-shadow 0.15s ease;
 }
 
-/* Minimal glowing laser core inside shoot button */
+/* Glowing laser core */
 .shoot-btn-core {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 80, 100, 0.7);
+  background: rgba(255, 50, 80, 0.4);
+  box-shadow: 0 0 10px rgba(255, 50, 80, 0.45);
   pointer-events: none;
   transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Active tap state (semi-automatic tap feedback) */
+.touch-btn-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.75);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.touch-btn-label.fire-label {
+  color: rgba(255, 120, 140, 0.9);
+}
+
+/* Semi-automatic tap feedback */
 .touch-shoot-btn:active,
 .touch-shoot-btn.active {
-  opacity: 0.95;
-  transform: scale(0.9);
-  background: rgba(244, 63, 94, 0.2);
-  border-color: rgba(244, 63, 94, 0.7);
-  box-shadow: 0 0 20px rgba(244, 63, 94, 0.45),
-              inset 0 0 10px rgba(244, 63, 94, 0.25);
+  opacity: 1;
+  transform: scale(0.92);
+  background: rgba(244, 63, 94, 0.28);
+  border-color: rgba(244, 63, 94, 0.85);
+  box-shadow: 0 0 24px rgba(244, 63, 94, 0.6), inset 0 0 12px rgba(244, 63, 94, 0.3);
 }
 
 .touch-shoot-btn:active .shoot-btn-core,
 .touch-shoot-btn.active .shoot-btn-core {
   transform: scale(1.15);
   background: #ff3366;
-  border-color: #ff6688;
-  box-shadow: 0 0 12px rgba(255, 51, 102, 0.85);
+  border-color: #ff88a3;
+  box-shadow: 0 0 16px rgba(255, 51, 102, 0.95);
+}
+
+/* Right-hand side Boost Zone & Button */
+.touch-boost-zone {
+  position: absolute;
+  bottom: 124px;
+  right: 36px;
+  width: 78px;
+  height: 78px;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 78;
+}
+
+.touch-boost-btn {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 240, 255, 0.35);
+  background: rgba(10, 15, 26, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 240, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  opacity: 0.85;
+  gap: 2px;
+  color: #00f0ff;
+  transition: transform 0.1s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.15s ease,
+              border-color 0.15s ease,
+              opacity 0.2s ease,
+              box-shadow 0.15s ease;
+}
+
+.boost-btn-icon {
+  width: 18px;
+  height: 18px;
+  stroke: #00f0ff;
+  filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.6));
+  pointer-events: none;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.touch-btn-label.boost-label,
+.touch-boost-btn .touch-btn-label {
+  color: #00f0ff;
+}
+
+/* Boost active held state */
+.touch-boost-btn:active,
+.touch-boost-btn.active {
+  opacity: 1;
+  transform: scale(0.92);
+  background: rgba(0, 240, 255, 0.28);
+  border-color: #00f0ff;
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.7), inset 0 0 12px rgba(0, 240, 255, 0.35);
+}
+
+.touch-boost-btn:active .boost-btn-icon,
+.touch-boost-btn.active .boost-btn-icon {
+  transform: scale(1.15);
+  filter: drop-shadow(0 0 8px #00f0ff);
 }
 
 @media (max-width: 600px), (max-height: 480px) {
   .touch-shoot-zone {
-    bottom: 20px;
-    right: 20px;
-    width: 88px;
-    height: 88px;
+    bottom: 18px;
+    right: 18px;
+    width: 80px;
+    height: 80px;
   }
   .touch-shoot-btn {
-    width: 60px;
-    height: 60px;
+    width: 62px;
+    height: 62px;
+  }
+  .touch-boost-zone {
+    bottom: 96px;
+    right: 24px;
+    width: 68px;
+    height: 68px;
+  }
+  .touch-boost-btn {
+    width: 50px;
+    height: 50px;
+  }
+  .touch-joystick-zone {
+    top: calc(100vh - 80px);
+    left: 75px;
+    width: 100px;
+    height: 100px;
+  }
+  .joystick-base {
+    width: 86px;
+    height: 86px;
+  }
+  .joystick-knob {
+    width: 38px;
+    height: 38px;
   }
 }
 
