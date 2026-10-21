@@ -127,6 +127,7 @@ export class SpaceshipController {
     this._crosshairTimer = null;
 
     // Combat Health & Shield System
+    this.radius = 3.6;
     this.health = 100.0;
     this.maxHealth = 100.0;
     this.shield = 100.0;
@@ -1102,6 +1103,9 @@ export class SpaceshipController {
 
     if (this.health <= 0 && !this.isDestroyed) {
       this.isDestroyed = true;
+      this.enabled = false;
+      this.currentSpeed = 0;
+      this.velocity.set(0, 0, 0);
       sounds.playExplosion(1.5);
       this.triggerCameraShake(0.85);
       this.visualHolder.visible = false;

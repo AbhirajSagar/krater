@@ -5,7 +5,7 @@ import { SkyboxManager } from './SkyboxManager.js';
 import { SpaceshipController } from './SpaceshipController.js';
 import { SpaceDust } from './SpaceDust.js';
 import { AsteroidField } from './AsteroidField.js';
-import { TouchControls, detectTouchDevice } from './TouchControls.js';
+import { TouchControls, isTouchOrMobileDevice } from './TouchControls.js';
 import { OptionsMenu } from './OptionsMenu.js';
 import { GameplayRecorder } from './GameplayRecorder.js';
 
@@ -99,8 +99,10 @@ let crosshairContainer = null;
 let touchControlsContainer = null;
 let touchControls = null;
 
-// Initial touch capability check
-detectTouchDevice();
+// Strict initial touch/mobile capability check
+if (isTouchOrMobileDevice() && typeof document !== 'undefined' && document.body) {
+  document.body.classList.add('touch-device');
+}
 
 // Game State Switching Functions & Floating Menu Layout
 function updateMenuLayout() {
@@ -168,8 +170,11 @@ function startBattle(room = null, isSolo = false) {
   // Keep crosshair hidden during gameplay per user specification
   if (crosshairContainer) crosshairContainer.classList.remove('visible');
 
-  // Reveal touch controls during battle on mobile and touchscreens
-  if (touchControlsContainer) touchControlsContainer.classList.add('visible');
+  // Reveal touch controls during battle strictly on mobile and touch devices
+  if ((isTouchOrMobileDevice() || document.body.classList.contains('touch-device')) && touchControlsContainer) {
+    document.body.classList.add('touch-device');
+    touchControlsContainer.classList.add('visible');
+  }
 
   // Reset local stats
   localKills = 0;
@@ -263,9 +268,9 @@ function animate() {
     sunLight.target.updateMatrixWorld();
   }
 
-  // Update Remote Opponents
+  // Update Remote Opponents & check incoming laser hits
   if (remotePlayersManager) {
-    remotePlayersManager.update(dt, camera);
+    remotePlayersManager.update(dt, camera, spaceship);
   }
 
   // Update Tactical Combat HUD
@@ -468,6 +473,18 @@ function bindNetworkEvents() {
       localKills += 1;
       localScore += 100;
       client.updatePlayerState({ kills: localKills, score: localScore });
+      if (lobbyUI) {
+        lobbyUI.showToast(`TARGET DESTROYED: ${victimName.toUpperCase()}`, 'success');
+      }
+
+      // If local killer is room host, enforce kick on the eliminated player
+      if (client.room && client.room.hostId === client.playerId) {
+        client.kickPlayer(data.victimId, 'Vessel destroyed in combat').catch(() => {});
+      }
+    }
+
+    if (isLocalVictim && spaceship && !spaceship.isDestroyed) {
+      spaceship.takeDamage(999, data.killerId);
     }
 
     syncScoreboard();
@@ -520,13 +537,41 @@ function bindNetworkEvents() {
 
     spaceship.onLaserHitEnemy = (enemyPlayer, hitPoint, damage) => {
       if (combatHUD) combatHUD.triggerHitmarker();
+
+      // Immediate visual shield flash and damage on remote ship
+      if (enemyPlayer) {
+        enemyPlayer.flashShield();
+        const currentShield = enemyPlayer.shield || 0;
+        const currentHealth = enemyPlayer.health || 100;
+        let newShield = currentShield;
+        let newHealth = currentHealth;
+        if (currentShield > 0) {
+          if (damage <= currentShield) {
+            newShield -= damage;
+          } else {
+            const leftover = damage - currentShield;
+            newShield = 0;
+            newHealth = Math.max(0, currentHealth - leftover);
+          }
+        } else {
+          newHealth = Math.max(0, currentHealth - damage);
+        }
+        enemyPlayer.setVitals(newHealth, newShield);
+
+        if (newHealth <= 0 && !enemyPlayer.isDestroyed) {
+          if (remotePlayersManager) {
+            remotePlayersManager.handlePlayerKilled(enemyPlayer.id);
+          }
+        }
+      }
+
       if (currentGameState === 'BATTLE' && client.isConnected && client.room) {
         client.relay('PLAYER_HIT', {
           victimId: enemyPlayer.id,
           attackerId: client.playerId,
           damage,
           hitPoint: hitPoint.toArray()
-        }, enemyPlayer.id);
+        }, 'others');
       }
     };
 
@@ -541,27 +586,25 @@ function bindNetworkEvents() {
     spaceship.onDestroyed = (killerId) => {
       localDeaths += 1;
       if (touchControls) touchControls.resetAll();
+
+      // Broadcast kill to arena so killer gets credit and all pilots see explosion
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
-        client.relay('PLAYER_KILLED', { victimId: client.playerId, killerId });
+        client.relay('PLAYER_KILLED', { victimId: client.playerId, killerId }, 'all');
         client.updatePlayerState({ deaths: localDeaths, isDestroyed: true });
+
+        // Kick the dead player off the match immediately
+        client.leaveRoom();
       }
-      // Seamless auto-respawn after 3s without displaying any destroyed overlay screens
+
+      // Show alert toast
+      if (lobbyUI) {
+        lobbyUI.showToast('SHIP DESTROYED · YOU HAVE BEEN ELIMINATED', 'error');
+      }
+
+      // Kick off the game back to main menu after short explosion visual
       setTimeout(() => {
-        if (currentGameState === 'BATTLE' && spaceship) {
-          spaceship.respawn();
-          if (client && client.isConnected && client.room) {
-            client.relay('PLAYER_RESPAWNED', { playerId: client.playerId, pos: spaceship.root.position.toArray() });
-            client.updatePlayerState({
-              shield: 100,
-              health: 100,
-              isDestroyed: false,
-              score: localScore,
-              kills: localKills,
-              deaths: localDeaths,
-            });
-          }
-        }
-      }, 3000);
+        enterMainMenu(true);
+      }, 1200);
     };
   }
 

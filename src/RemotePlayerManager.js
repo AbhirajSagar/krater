@@ -13,6 +13,8 @@ import { sounds } from './SoundManager.js';
 const _seg = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _closest = new THREE.Vector3();
+const _pOldPos = new THREE.Vector3();
+const _pNewPos = new THREE.Vector3();
 
 export class RemotePlayerManager {
   /**
@@ -318,7 +320,7 @@ export class RemotePlayerManager {
     sounds.playExplosion(1.4);
   }
 
-  update(dt, camera) {
+  update(dt, camera, localSpaceship = null) {
     const camPos = camera ? camera.position : null;
 
     // Update each remote player
@@ -326,12 +328,37 @@ export class RemotePlayerManager {
       player.update(dt, camPos);
     }
 
-    // Update remote lasers
+    // Update remote lasers & check collision against local player's spaceship
     if (this.activeLasers.length > 0) {
       for (let i = this.activeLasers.length - 1; i >= 0; i--) {
         const p = this.activeLasers[i];
         p.life += dt;
+
+        _pOldPos.copy(p.group.position);
         p.group.position.addScaledVector(p.dir, p.speed * dt);
+        _pNewPos.copy(p.group.position);
+
+        // Check collision against local spaceship
+        if (localSpaceship && localSpaceship.enabled && !localSpaceship.isDestroyed && (localSpaceship.invulnerableTimer || 0) <= 0) {
+          const shipPos = localSpaceship.root.position;
+          const r = localSpaceship.radius || 2.4;
+
+          _seg.subVectors(_pNewPos, _pOldPos);
+          const segLenSq = _seg.lengthSq();
+          if (segLenSq > 0.0001) {
+            _v.subVectors(shipPos, _pOldPos);
+            const t = THREE.MathUtils.clamp(_v.dot(_seg) / segLenSq, 0, 1);
+            _closest.copy(_pOldPos).addScaledVector(_seg, t);
+
+            if (_closest.distanceToSquared(shipPos) <= r * r) {
+              p.active = false;
+              p.group.visible = false;
+              this.activeLasers.splice(i, 1);
+              localSpaceship.takeDamage(25, p.shooterId, _closest);
+              continue;
+            }
+          }
+        }
 
         if (p.life >= p.maxLife) {
           p.active = false;
