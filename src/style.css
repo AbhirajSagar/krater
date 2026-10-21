@@ -628,6 +628,27 @@ body.touch-device #touch-controls.visible {
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
 }
 
+.dev-toggle-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: none;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dev-toggle-dot.on {
+  background: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff;
+}
+
+#btn-dev-stats-toggle.active {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.4);
+  color: #00f0ff;
+}
+
 .btn-leave-arena {
   color: #ff4d6d !important;
   border-color: rgba(255, 77, 109, 0.4) !important;
@@ -667,6 +688,141 @@ body.touch-device #touch-controls.visible {
 
 .hidden {
   display: none !important;
+}
+
+/* =========================================================
+   DEVELOPER TELEMETRY HUD ("STATS FOR NERDS")
+   ========================================================= */
+
+.dev-stats-hud {
+  position: fixed;
+  top: 20px;
+  left: 24px;
+  z-index: 95;
+  background: rgba(8, 12, 22, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+  min-width: 210px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #ffffff;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dev-stats-hud.hidden {
+  display: none !important;
+}
+
+.dev-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dev-stats-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+}
+
+.dev-stats-fps-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dev-stats-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dev-stats-dot.good {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+.dev-stats-dot.ok {
+  background: #eab308;
+  box-shadow: 0 0 6px #eab308;
+}
+
+.dev-stats-dot.bad {
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+.dev-stat-val-fps {
+  font-size: 13px;
+  font-weight: 700;
+  color: #00f0ff;
+  letter-spacing: 0.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-stat-ms {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  margin-top: 8px;
+}
+
+.dev-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dev-stat-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.9px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+}
+
+.dev-stat-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+@media (max-width: 600px), (max-height: 480px) {
+  .dev-stats-hud {
+    top: 14px;
+    left: 14px;
+    padding: 8px 10px 10px;
+    min-width: 180px;
+  }
+  .dev-stats-grid {
+    gap: 4px 10px;
+  }
+  .dev-stat-val {
+    font-size: 10px;
+  }
 }
 
 /* =========================================================

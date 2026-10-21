@@ -24,19 +24,23 @@
       </div>
     </div>
 
-    <!-- Sci-Fi HUD Crosshair -->
-    <div id="crosshair-container" class="crosshair-container">
-      <div class="crosshair-hud">
-        <div class="crosshair-dot"></div>
-        <div class="crosshair-circle"></div>
-        <div class="crosshair-bracket top-left"></div>
-        <div class="crosshair-bracket top-right"></div>
-        <div class="crosshair-bracket bottom-left"></div>
-        <div class="crosshair-bracket bottom-right"></div>
-        <div class="crosshair-line line-top"></div>
-        <div class="crosshair-line line-bottom"></div>
-        <div class="crosshair-line line-left"></div>
-        <div class="crosshair-line line-right"></div>
+    <!-- Sci-Fi Minimal Rhombus Crosshair -->
+    <div id="crosshair-container" class="crosshair-container" aria-hidden="true">
+      <svg class="crosshair-rhombus" viewBox="0 0 32 32" fill="none">
+        <polygon class="rhombus-outline" points="16,3 29,16 16,29 3,16" />
+        <circle class="rhombus-dot" cx="16" cy="16" r="1.5" />
+      </svg>
+    </div>
+
+    <!-- Minimal Weapon Ammo Telemetry -->
+    <div id="minimal-ammo-hud" class="minimal-ammo-hud" aria-label="Weapon Ammunition">
+      <svg class="ammo-icon" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4 4c0-1.1.9-2 2-2s2 .9 2 2v8H4V4zm0 10h4v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7z"/>
+      </svg>
+      <div class="ammo-digits-wrap">
+        <span class="ammo-current" id="ammo-current-val">60</span>
+        <span class="ammo-divider">/</span>
+        <span class="ammo-total" id="ammo-total-val">60</span>
       </div>
     </div>
 

@@ -27,6 +27,13 @@ export class SkyboxManager {
         files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
       },
       {
+        id: 'blue_pink',
+        name: 'Blue Pink Nebula',
+        type: 'cube',
+        path: '/skyboxes/blue_pink/',
+        files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
+      },
+      {
         id: 'deep_space',
         name: 'Deep Space',
         type: 'cube',
@@ -107,7 +114,7 @@ export class SkyboxManager {
    * @returns {string}
    */
   getNextSequentialSkyboxId() {
-    const listLen = this.skyboxes.length || 4;
+    const listLen = this.skyboxes.length || 5;
     const stored = this.getStoredIndex();
     const nextIdx = (stored + 1) % listLen;
     return this.skyboxes[nextIdx]?.id || 'blue_nebula';

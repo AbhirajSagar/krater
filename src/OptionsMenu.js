@@ -10,13 +10,25 @@ export class OptionsMenu {
   constructor(options = {}) {
     this.spaceship = options.spaceship || null;
     this.onLeaveMatch = options.onLeaveMatch || null;
+    this.onToggleDevStats = options.onToggleDevStats || null;
     this.isOpen = false;
     this.canControl = false;
     this.inBattle = false;
 
+    // Disabled by default per user specification
+    this.devStatsEnabled = false;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        this.devStatsEnabled = localStorage.getItem('spacegame_dev_stats') === 'true';
+      }
+    } catch {
+      this.devStatsEnabled = false;
+    }
+
     this.initDOM();
     this.setupListeners();
     this.updateFullscreenUI();
+    this.updateDevStatsUI();
   }
 
   setSpaceship(spaceship) {
@@ -96,6 +108,18 @@ export class OptionsMenu {
               </button>
             </div>
 
+            <!-- Stats for Nerds / Developer Telemetry Row -->
+            <div class="option-row">
+              <div class="option-info">
+                <span class="option-label">Stats for Nerds</span>
+                <span class="option-desc">FPS, polygons, draw calls & GPU telemetry</span>
+              </div>
+              <button id="btn-dev-stats-toggle" class="glass-btn-sm" aria-label="Toggle Stats for Nerds">
+                <span class="dev-toggle-dot" id="dev-toggle-dot"></span>
+                <span id="label-dev-stats">OFF</span>
+              </button>
+            </div>
+
             <!-- Return to Menu Row (when in battle) -->
             <div id="option-row-leave" class="option-row hidden">
               <div class="option-info">
@@ -122,6 +146,9 @@ export class OptionsMenu {
     this.iconEnterFullscreen = document.getElementById('icon-enter-fullscreen');
     this.iconExitFullscreen = document.getElementById('icon-exit-fullscreen');
     this.labelFullscreen = document.getElementById('label-fullscreen');
+    this.devStatsBtn = document.getElementById('btn-dev-stats-toggle');
+    this.devToggleDot = document.getElementById('dev-toggle-dot');
+    this.labelDevStats = document.getElementById('label-dev-stats');
     this.leaveBtn = document.getElementById('btn-leave-match');
     this.leaveRow = document.getElementById('option-row-leave');
   }
@@ -158,6 +185,12 @@ export class OptionsMenu {
       this.toggleFullscreen();
     });
 
+    // Dev stats toggle button action
+    this.devStatsBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleDevStats();
+    });
+
     // Keyboard shortcut (Escape or 'O' key)
     window.addEventListener('keydown', (e) => {
       // Don't intercept if modifier keys like Ctrl/Meta are held
@@ -188,6 +221,7 @@ export class OptionsMenu {
     this.isOpen = true;
     this.dialogBackdrop?.classList.remove('hidden');
     this.updateFullscreenUI();
+    this.updateDevStatsUI();
 
     // Guard spaceship controls while in options dialog
     if (this.spaceship) {
@@ -281,6 +315,43 @@ export class OptionsMenu {
 
     if (this.labelFullscreen) {
       this.labelFullscreen.textContent = isFull ? 'Exit Fullscreen' : 'Fullscreen';
+    }
+  }
+
+  toggleDevStats() {
+    this.devStatsEnabled = !this.devStatsEnabled;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_dev_stats', String(this.devStatsEnabled));
+      }
+    } catch {
+      // ignore
+    }
+    this.updateDevStatsUI();
+    if (this.onToggleDevStats) {
+      this.onToggleDevStats(this.devStatsEnabled);
+    }
+  }
+
+  updateDevStatsUI() {
+    if (this.devStatsBtn) {
+      if (this.devStatsEnabled) {
+        this.devStatsBtn.classList.add('active');
+      } else {
+        this.devStatsBtn.classList.remove('active');
+      }
+    }
+
+    if (this.devToggleDot) {
+      if (this.devStatsEnabled) {
+        this.devToggleDot.classList.add('on');
+      } else {
+        this.devToggleDot.classList.remove('on');
+      }
+    }
+
+    if (this.labelDevStats) {
+      this.labelDevStats.textContent = this.devStatsEnabled ? 'ON' : 'OFF';
     }
   }
 }

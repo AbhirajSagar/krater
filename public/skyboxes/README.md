@@ -6,6 +6,7 @@ On launch, the game randomly selects and loads one of the skyboxes from this dir
 ## Current Skyboxes
 - **`purple_nebula`**: Swirling violet and magenta cosmic dust with glowing star clusters.
 - **`blue_nebula`**: Azure, electric cyan, and turquoise interstellar nursery.
+- **`blue_pink`**: Electric blue and vibrant magenta synthwave cosmic nebula.
 - **`deep_space`**: Pitch-black stellar cosmos filled with twinkling stars and galaxies.
 - **`golden_galaxy`**: Radiant amber and warm galactic plane core.
 

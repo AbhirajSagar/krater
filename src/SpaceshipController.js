@@ -138,6 +138,11 @@ export class SpaceshipController {
     this.shieldRegenTimer = 0.0;
     this.shieldRegenRate = 22.0;
 
+    // Weapon Ammo System
+    this.maxAmmo = 60;
+    this.currentAmmo = 60;
+    this.onAmmoChanged = null;
+
     // Multiplayer Combat Hooks
     this.remotePlayersManager = null;
     this.onLaserFired = null;
@@ -480,6 +485,16 @@ export class SpaceshipController {
   updateCrosshairAim() {
     if (!this.crosshairContainer || this.cameraMode === 2) return;
 
+    // Check remote enemy players in aim cone first
+    if (this.remotePlayersManager) {
+      const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.16);
+      if (enemyTarget && enemyTarget.player) {
+        this.crosshairContainer.classList.add('target-locked');
+        this.aimTargetPoint = enemyTarget.player.root.position.clone();
+        return;
+      }
+    }
+
     if (this.asteroidField) {
       this.targetMeshes = this.asteroidField.getMeshes();
     }
@@ -500,7 +515,7 @@ export class SpaceshipController {
 
   toggleCameraMode() {
     this.cameraMode = (this.cameraMode + 1) % 3;
-    if (this.crosshairContainer) {
+    if (this.crosshairContainer && this.crosshairContainer.classList.contains('visible')) {
       this.crosshairContainer.style.display = this.cameraMode === 2 ? 'none' : 'flex';
     }
   }
@@ -691,7 +706,7 @@ export class SpaceshipController {
   }
 
   triggerCameraShake(strength = this.cameraShakeStrength) {
-    this.cameraShake = Math.max(this.cameraShake, strength);
+    this.cameraShake = Math.min(1.2, this.cameraShake * 0.45 + strength);
   }
 
   updateCamera(dt) {
@@ -718,30 +733,40 @@ export class SpaceshipController {
         .addScaledVector(forward, -dynamicChaseDist)
         .addScaledVector(up, this.cameraChaseOffset.y);
 
-      const shake = this.cameraShake;
-
-      if (shake > 0.001) 
-        idealPos.add(new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, -shake * 0.5));
-
-      // Visceral high-speed engine micro-vibration
-      if (speedRatio > 0.15 || this.isBoosting) {
-        const engineVib = 0.025 * speedRatio + (this.isBoosting ? 0.065 : 0.0);
-        idealPos.add(new THREE.Vector3(
-          (Math.random() - 0.5) * engineVib,
-          (Math.random() - 0.5) * engineVib,
-          (Math.random() - 0.5) * engineVib
-        ));
-      }
-
       // Smooth camera interpolation
       const smoothFactor = 1 - Math.exp(-14 * dt);
       this.camera.position.lerp(idealPos, smoothFactor);
+
+      // Visceral high-speed engine micro-vibration
+      if (speedRatio > 0.15 || this.isBoosting) {
+        const engineVib = 0.02 * speedRatio + (this.isBoosting ? 0.045 : 0.0);
+        this.camera.position
+          .addScaledVector(right, (Math.random() - 0.5) * engineVib)
+          .addScaledVector(up, (Math.random() - 0.5) * engineVib);
+      }
 
       // Look at a target ahead of the ship
       const lookTarget = new THREE.Vector3()
         .copy(this.root.position)
         .addScaledVector(forward, this.cameraLookAhead)
         .addScaledVector(up, 0.5);
+
+      // Direct punchy recoil & weapon firing camera shake
+      if (this.cameraShake > 0.001) {
+        const s = this.cameraShake;
+        const shakeX = (Math.random() - 0.5) * s * 0.85;
+        const shakeY = (Math.random() - 0.35) * s * 0.75; // Slight upward recoil kick
+        const shakeZ = -(Math.random() * 0.5 + 0.3) * s * 0.5; // Backward recoil kick
+
+        this.camera.position
+          .addScaledVector(right, shakeX)
+          .addScaledVector(up, shakeY)
+          .addScaledVector(forward, shakeZ);
+
+        lookTarget
+          .addScaledVector(right, shakeX * 0.5)
+          .addScaledVector(up, shakeY * 0.7);
+      }
 
       this.camera.lookAt(lookTarget);
       this.camera.up.copy(up);
@@ -750,6 +775,7 @@ export class SpaceshipController {
       // MODE 1: Cockpit First-Person
       const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion);
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.quaternion);
 
       const cockpitPos = new THREE.Vector3()
         .copy(this.root.position)
@@ -761,6 +787,23 @@ export class SpaceshipController {
       const lookTarget = new THREE.Vector3()
         .copy(cockpitPos)
         .addScaledVector(forward, 50.0);
+
+      // Visceral cockpit firing recoil
+      if (this.cameraShake > 0.001) {
+        const s = this.cameraShake * 0.75;
+        const shakeX = (Math.random() - 0.5) * s * 0.8;
+        const shakeY = (Math.random() - 0.35) * s * 0.7;
+        const shakeZ = -(Math.random() * 0.5 + 0.3) * s * 0.4;
+
+        this.camera.position
+          .addScaledVector(right, shakeX)
+          .addScaledVector(up, shakeY)
+          .addScaledVector(forward, shakeZ);
+
+        lookTarget
+          .addScaledVector(right, shakeX * 0.8)
+          .addScaledVector(up, shakeY * 0.9);
+      }
 
       this.camera.lookAt(lookTarget);
       this.camera.up.copy(up);
@@ -776,6 +819,14 @@ export class SpaceshipController {
         this.root.position.y + cy,
         this.root.position.z + cz
       );
+
+      if (this.cameraShake > 0.001) {
+        const s = this.cameraShake * 0.4;
+        this.camera.position.x += (Math.random() - 0.5) * s;
+        this.camera.position.y += (Math.random() - 0.5) * s;
+        this.camera.position.z += (Math.random() - 0.5) * s;
+      }
+
       this.camera.lookAt(this.root.position);
       this.camera.up.set(0, 1, 0);
     }
@@ -872,11 +923,25 @@ export class SpaceshipController {
    * @returns {boolean} Whether lasers were fired
    */
   fireWeapons(customShootingPoints = null) {
-    if (!this.enabled) return false;
+    if (!this.enabled || this.isDestroyed) return false;
+
+    // Out of ammo
+    if (this.currentAmmo <= 0) {
+      sounds.playClick();
+      return false;
+    }
+
     const now = performance.now();
     if (!this.lastFireTime || (now - this.lastFireTime) > 130) {
       this.lastFireTime = now;
+      this.currentAmmo = Math.max(0, this.currentAmmo - 1);
+
       this.testFireWeapons(customShootingPoints);
+
+      if (this.onAmmoChanged) {
+        this.onAmmoChanged(this.currentAmmo, this.maxAmmo);
+      }
+
       return true;
     }
     return false;
@@ -1126,6 +1191,10 @@ export class SpaceshipController {
     this.health = this.maxHealth;
     this.shield = this.maxShield;
     this.invulnerableTimer = 3.0;
+    this.currentAmmo = this.maxAmmo;
+    if (this.onAmmoChanged) {
+      this.onAmmoChanged(this.currentAmmo, this.maxAmmo);
+    }
     this.visualHolder.visible = true;
     this.currentSpeed = 0;
     this.targetSpeed = 0;

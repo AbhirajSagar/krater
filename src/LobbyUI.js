@@ -31,6 +31,7 @@ export const COLOR_SWATCHES = [
 export const SKYBOX_OPTIONS = [
   { id: 'purple_nebula', name: 'Purple Nebula', shortName: 'Purple Nebula', color: '#a855f7', glow: 'rgba(168, 85, 247, 0.45)' },
   { id: 'blue_nebula', name: 'Blue Nebula', shortName: 'Blue Nebula', color: '#00f0ff', glow: 'rgba(0, 240, 255, 0.45)' },
+  { id: 'blue_pink', name: 'Blue Pink Nebula', shortName: 'Blue Pink', color: '#ec4899', glow: 'rgba(236, 72, 153, 0.45)' },
   { id: 'deep_space', name: 'Deep Space', shortName: 'Deep Space', color: '#94a3b8', glow: 'rgba(148, 163, 184, 0.45)' },
   { id: 'golden_galaxy', name: 'Golden Galaxy', shortName: 'Golden Galaxy', color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.45)' }
 ];
@@ -452,6 +453,7 @@ export class LobbyUI {
                 <label for="create-skybox">Environment</label>
                 <select id="create-skybox">
                   <option value="blue_nebula">Blue Nebula</option>
+                  <option value="blue_pink">Blue Pink Nebula</option>
                   <option value="deep_space">Deep Space</option>
                   <option value="golden_galaxy">Golden Galaxy</option>
                   <option value="purple_nebula">Purple Nebula</option>

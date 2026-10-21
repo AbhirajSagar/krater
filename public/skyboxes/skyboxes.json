@@ -28,6 +28,20 @@
     ]
   },
   {
+    "id": "blue_pink",
+    "name": "Blue Pink Nebula",
+    "type": "cube",
+    "path": "/skyboxes/blue_pink/",
+    "files": [
+      "px.png",
+      "nx.png",
+      "py.png",
+      "ny.png",
+      "pz.png",
+      "nz.png"
+    ]
+  },
+  {
     "id": "deep_space",
     "name": "Deep Space",
     "type": "cube",

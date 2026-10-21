@@ -8,6 +8,7 @@ import { AsteroidField } from './AsteroidField.js';
 import { TouchControls, isTouchOrMobileDevice } from './TouchControls.js';
 import { OptionsMenu } from './OptionsMenu.js';
 import { GameplayRecorder } from './GameplayRecorder.js';
+import { DevStatsHUD } from './DevStatsHUD.js';
 
 // Multiplayer Modules
 import { MultiplayerClient } from './MultiplayerClient.js';
@@ -48,13 +49,25 @@ renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+// Dev Stats HUD ("Stats for Nerds")
+const devStatsHUD = new DevStatsHUD({
+  renderer,
+  scene,
+  camera,
+  getClient: () => client
+});
+
 // Options & Recorder
 const optionsMenu = new OptionsMenu({
   onLeaveMatch: () => {
     if (client) client.leaveRoom();
     enterMainMenu(true);
+  },
+  onToggleDevStats: (enabled) => {
+    if (devStatsHUD) devStatsHUD.setVisible(enabled);
   }
 });
+devStatsHUD.setVisible(optionsMenu.devStatsEnabled);
 const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
 
 // 5. Lighting Setup
@@ -99,6 +112,29 @@ let crosshairContainer = null;
 let touchControlsContainer = null;
 let touchControls = null;
 
+// Minimal Ammo Telemetry HUD elements
+let minimalAmmoHUD = null;
+let ammoCurrentVal = null;
+let ammoTotalVal = null;
+
+function updateAmmoUI(current, max) {
+  if (!minimalAmmoHUD) return;
+
+  const isLow = current <= 10 && current > 0;
+  const isEmpty = current <= 0;
+
+  if (ammoCurrentVal) {
+    ammoCurrentVal.textContent = current;
+    ammoCurrentVal.className = `ammo-current${isLow ? ' low' : ''}${isEmpty ? ' empty' : ''}`;
+  }
+  if (ammoTotalVal) {
+    ammoTotalVal.textContent = max;
+  }
+
+  minimalAmmoHUD.classList.toggle('low', isLow);
+  minimalAmmoHUD.classList.toggle('empty', isEmpty);
+}
+
 // Strict initial touch/mobile capability check
 if (isTouchOrMobileDevice() && typeof document !== 'undefined' && document.body) {
   document.body.classList.add('touch-device');
@@ -134,8 +170,12 @@ function enterMainMenu(advanceSkybox = false) {
   }
   if (combatHUD) combatHUD.hide();
   if (lobbyUI) lobbyUI.showMenu();
-  if (crosshairContainer) crosshairContainer.classList.remove('visible');
+  if (crosshairContainer) {
+    crosshairContainer.classList.remove('visible');
+    crosshairContainer.style.display = 'none';
+  }
   if (touchControlsContainer) touchControlsContainer.classList.remove('visible');
+  if (minimalAmmoHUD) minimalAmmoHUD.classList.remove('visible');
   if (touchControls) touchControls.resetAll();
   if (remotePlayersManager) remotePlayersManager.clear();
   if (asteroidField) asteroidField.reseed('spacegame_menu_sector');
@@ -167,13 +207,24 @@ function startBattle(room = null, isSolo = false) {
     spaceship.respawn(new THREE.Vector3(0, 0, 0));
   }
 
-  // Keep crosshair hidden during gameplay per user specification
-  if (crosshairContainer) crosshairContainer.classList.remove('visible');
+  // Show combat crosshair during battle
+  if (crosshairContainer) {
+    crosshairContainer.style.display = 'flex';
+    crosshairContainer.classList.add('visible');
+  }
 
   // Reveal touch controls during battle strictly on mobile and touch devices
   if ((isTouchOrMobileDevice() || document.body.classList.contains('touch-device')) && touchControlsContainer) {
     document.body.classList.add('touch-device');
     touchControlsContainer.classList.add('visible');
+  }
+
+  // Reveal minimal ammo telemetry HUD during battle
+  if (minimalAmmoHUD) {
+    minimalAmmoHUD.classList.add('visible');
+    if (spaceship) {
+      updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+    }
   }
 
   // Reset local stats
@@ -338,6 +389,7 @@ function animate() {
 
   renderer.render(scene, camera);
   if (gameplayRecorder) gameplayRecorder.recordFrame(canvas);
+  if (devStatsHUD) devStatsHUD.update(dt);
 }
 
 // Start render loop immediately
@@ -686,6 +738,26 @@ async function initPipeline() {
 
   // Touch Controls
   touchControls = new TouchControls(spaceship, skyboxManager);
+
+  // Minimal Ammo Telemetry HUD
+  minimalAmmoHUD = document.getElementById('minimal-ammo-hud');
+  ammoCurrentVal = document.getElementById('ammo-current-val');
+  ammoTotalVal = document.getElementById('ammo-total-val');
+
+  if (spaceship) {
+    spaceship.onAmmoChanged = (current, max) => {
+      updateAmmoUI(current, max);
+      if (minimalAmmoHUD) {
+        minimalAmmoHUD.classList.remove('firing');
+        void minimalAmmoHUD.offsetWidth;
+        minimalAmmoHUD.classList.add('firing');
+        setTimeout(() => {
+          if (minimalAmmoHUD) minimalAmmoHUD.classList.remove('firing');
+        }, 75);
+      }
+    };
+    updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+  }
 
   // Phase 5: Multiplayer Client & Remote Opponents
   client = new MultiplayerClient();

@@ -382,6 +382,14 @@ export class SpaceDust {
         new THREE.Color(0x67e8f9), // Bright aqua
         new THREE.Color(0x60a5fa)  // Plasma blue
       ];
+    } else if (skyboxId === 'blue_pink') {
+      palette = [
+        new THREE.Color(0xffffff), // Diamond white
+        new THREE.Color(0x38bdf8), // Electric cyan
+        new THREE.Color(0xf472b6), // Soft neon pink
+        new THREE.Color(0xec4899), // Hot magenta pink
+        new THREE.Color(0x818cf8)  // Violet transition
+      ];
     } else if (skyboxId === 'golden_galaxy') {
       palette = [
         new THREE.Color(0xffffff), // Solar white
