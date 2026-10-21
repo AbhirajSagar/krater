@@ -48,14 +48,16 @@ export class SpaceshipController {
     this.currentShipMesh = null;
     this.currentShipMaterial = null;
     this.loadedShipsCache = new Map();
+    this.loadingShipPromises = new Map();
+    this._targetShipIndex = 0;
 
     // Movement & physics parameters
-    this.maxSpeed = 45.0; // Normal cruising speed
-    this.boostSpeed = 100.0; // Boost speed
-    this.reverseSpeed = -15.0;
-    this.acceleration = 30.0;
-    this.deceleration = 15.0;
-    this.boostAcceleration = 60.0;
+    this.maxSpeed = 58.0; // Normal cruising speed
+    this.boostSpeed = 135.0; // Boost speed
+    this.reverseSpeed = -18.0;
+    this.acceleration = 42.0;
+    this.deceleration = 16.0;
+    this.boostAcceleration = 95.0;
     this.damping = 0.98; // Space inertia decay
 
     this.currentSpeed = 0.0;
@@ -82,7 +84,7 @@ export class SpaceshipController {
     // Camera modes: 0 = Chase, 1 = Cockpit, 2 = Orbit
     this.cameraMode = 0;
     this.baseFov = 60.0;
-    this.boostFov = 75.0;
+    this.boostFov = 84.0;
     this.cameraChaseOffset = new THREE.Vector3(0, 2.5, 7.5);
     this.cameraLookAhead = 15.0;
     this.cockpitOffset = new THREE.Vector3(0, 0.7, -0.2);
@@ -175,19 +177,6 @@ export class SpaceshipController {
         this.fireWeapons();
       }
 
-      // Number keys 1-9 and 0 for quick ship switch
-      if (e.code.startsWith('Digit')) {
-        const digit = parseInt(e.code.replace('Digit', ''), 10);
-        const idx = digit === 0 ? 9 : digit - 1;
-        this.selectShip(idx);
-      }
-
-      // Tab cycles ship
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        this.cycleShip();
-      }
-
       // V toggles camera view
       if (e.code === 'KeyV') {
         this.toggleCameraMode();
@@ -204,7 +193,7 @@ export class SpaceshipController {
         this.bankAngle = 0;
       }
 
-      // C cycles color themes (Red, Blue, Cyan, Orange, Green, Purple, etc.)
+      // C cycles color themes (only when in menu, not during battle)
       if (e.code === 'KeyC') {
         this.cycleColorTheme();
       }
@@ -231,7 +220,7 @@ export class SpaceshipController {
 
     window.addEventListener('mousedown', (e) => {
       if (!this.enabled) return;
-      if (e.target && e.target.closest && e.target.closest('#touch-controls')) {
+      if (e.target && e.target.closest && e.target.closest('#touch-controls, #btn-options-toggle, #options-dialog, .options-dialog-backdrop, .lobby-ui-root')) {
         return;
       }
       if (e.button === 0) {
@@ -242,6 +231,12 @@ export class SpaceshipController {
 
     window.addEventListener('mouseup', () => {
       this.isDraggingMouse = false;
+    });
+
+    window.addEventListener('contextmenu', (e) => {
+      if (this.enabled) {
+        e.preventDefault();
+      }
     });
 
     window.addEventListener('wheel', (e) => {
@@ -286,33 +281,37 @@ export class SpaceshipController {
     }
   }
 
-  async selectShip(index, onProgress = null) {
-    if (index < 0 || index >= this.shipConfigs.length) return;
-    const config = this.shipConfigs[index];
-    this.currentShipIndex = index;
-    this.currentConfig = config;
+  async preloadAdjacentShips(index, count = 2) {
+    if (!this.shipConfigs || this.shipConfigs.length === 0) return;
+    const len = this.shipConfigs.length;
+    for (let offset = 1; offset <= count; offset++) {
+      const nextIdx = (index + offset) % len;
+      const prevIdx = (index - offset + len) % len;
+      this.getOrLoadShip(nextIdx).catch(() => {});
+      this.getOrLoadShip(prevIdx).catch(() => {});
+    }
+  }
 
-    // Apply handling & physics parameters from spaceship config
-    if (config.handling) {
-      this.maxSpeed = config.handling.maxSpeed ?? this.maxSpeed;
-      this.boostSpeed = config.handling.boostSpeed ?? this.boostSpeed;
-      this.reverseSpeed = config.handling.reverseSpeed ?? this.reverseSpeed;
-      this.acceleration = config.handling.acceleration ?? this.acceleration;
-      this.deceleration = config.handling.deceleration ?? this.deceleration;
-      this.boostAcceleration = config.handling.boostAcceleration ?? this.boostAcceleration;
-      this.pitchSpeed = config.handling.pitchSpeed ?? this.pitchSpeed;
-      this.yawSpeed = config.handling.yawSpeed ?? this.yawSpeed;
-      this.rollSpeed = config.handling.rollSpeed ?? this.rollSpeed;
-      // Temporarily boosted for video recording
-      this.maxBoostEnergy = 1000.0;
-      this.boostCostPerSecond = 2.5; // ~400 seconds of continuous boost
-      this.boostRechargeRate = 80.0;
-      this.boostEnergy = this.maxBoostEnergy;
+  async preloadAllShips() {
+    if (!this.shipConfigs || this.shipConfigs.length === 0) return;
+    for (let i = 0; i < this.shipConfigs.length; i++) {
+      await this.getOrLoadShip(i);
+      // Yield to the event loop between loads so main thread animations remain buttery smooth
+      await new Promise(r => setTimeout(r, 20));
+    }
+  }
+
+  async getOrLoadShip(index, onProgress = null) {
+    if (index < 0 || index >= this.shipConfigs.length) return null;
+    const config = this.shipConfigs[index];
+    if (this.loadedShipsCache.has(config.id)) {
+      return this.loadedShipsCache.get(config.id);
+    }
+    if (this.loadingShipPromises.has(config.id)) {
+      return this.loadingShipPromises.get(config.id);
     }
 
-    // Check model cache
-    let cached = this.loadedShipsCache.get(config.id);
-    if (!cached) {
+    const loadPromise = (async () => {
       if (onProgress) {
         onProgress({ phase: 'model_start', shipName: config.name });
       }
@@ -365,17 +364,59 @@ export class SpaceshipController {
         }
       });
 
-      cached = { model: container, material: sparrowMat };
-      this.loadedShipsCache.set(config.id, cached);
+      const entry = { model: container, material: sparrowMat };
+      this.loadedShipsCache.set(config.id, entry);
+      this.loadingShipPromises.delete(config.id);
+      return entry;
+    })();
+
+    this.loadingShipPromises.set(config.id, loadPromise);
+    return loadPromise;
+  }
+
+  async selectShip(index, onProgress = null, force = false) {
+    // Player cannot change ship during active gameplay
+    if (this.enabled && !force) {
+      return;
+    }
+    if (index < 0 || index >= this.shipConfigs.length) return;
+    this._targetShipIndex = index;
+    const config = this.shipConfigs[index];
+    this.currentShipIndex = index;
+    this.currentConfig = config;
+
+    // Apply handling & physics parameters from spaceship config
+    if (config.handling) {
+      this.maxSpeed = (config.handling.maxSpeed ?? this.maxSpeed) * 1.18;
+      this.boostSpeed = (config.handling.boostSpeed ?? this.boostSpeed) * 1.25;
+      this.reverseSpeed = config.handling.reverseSpeed ?? this.reverseSpeed;
+      this.acceleration = (config.handling.acceleration ?? this.acceleration) * 1.25;
+      this.deceleration = config.handling.deceleration ?? this.deceleration;
+      this.boostAcceleration = (config.handling.boostAcceleration ?? 60.0) * 1.45;
+      this.pitchSpeed = config.handling.pitchSpeed ?? this.pitchSpeed;
+      this.yawSpeed = config.handling.yawSpeed ?? this.yawSpeed;
+      this.rollSpeed = config.handling.rollSpeed ?? this.rollSpeed;
+      this.maxBoostEnergy = 1000.0;
+      this.boostCostPerSecond = 2.5;
+      this.boostRechargeRate = 80.0;
+      this.boostEnergy = this.maxBoostEnergy;
     }
 
-    // Replace active visual model
+    const cached = await this.getOrLoadShip(index, onProgress);
+    if (!cached || this._targetShipIndex !== index) return;
+
+    // Replace active visual model smoothly
     if (this.currentShipMesh) {
       this.visualHolder.remove(this.currentShipMesh);
     }
     this.currentShipMesh = cached.model;
     this.currentShipMaterial = cached.material;
     this.visualHolder.add(this.currentShipMesh);
+
+    // Re-apply active color theme if one was selected
+    if (this.currentThemeKey && this.currentShipMaterial && this.currentShipMaterial.setTheme) {
+      this.currentShipMaterial.setTheme(this.currentThemeKey);
+    }
 
     // Build configured thrusters for this ship
     this.buildThrusters(config.thrusters);
@@ -389,20 +430,27 @@ export class SpaceshipController {
     if (this.enabled) {
       this.updateCamera(0.016);
     }
+
+    // Proactively preload adjacent vessels in the background
+    this.preloadAdjacentShips(index);
   }
 
-  cycleShip() {
+  cycleShip(force = false) {
+    if (this.enabled && !force) return;
     const nextIdx = (this.currentShipIndex + 1) % this.shipConfigs.length;
-    return this.selectShip(nextIdx);
+    return this.selectShip(nextIdx, null, force);
   }
 
-  cycleColorTheme() {
+  cycleColorTheme(force = false) {
+    if (this.enabled && !force) return;
     this.currentThemeIndex = (this.currentThemeIndex + 1) % THEME_KEYS.length;
     const themeKey = THEME_KEYS[this.currentThemeIndex];
-    this.setColorTheme(themeKey);
+    this.setColorTheme(themeKey, force);
   }
 
-  setColorTheme(themeKey) {
+  setColorTheme(themeKey, force = false) {
+    // Player cannot change color during active gameplay
+    if (this.enabled && !force) return;
     if (!SPARROW_THEMES[themeKey]) return;
     this.currentThemeKey = themeKey;
     if (this.currentShipMaterial && this.currentShipMaterial.setTheme) {
@@ -472,7 +520,14 @@ export class SpaceshipController {
       this.invulnerableTimer -= dt;
     }
 
-    if (!this.isDestroyed) {
+    if (!this.enabled) {
+      // In menu or disabled: do not apply flight physics or movement
+      this.currentSpeed = 0;
+      this.velocity.set(0, 0, 0);
+      this.angularVelocity.set(0, 0, 0);
+      this.bankAngle = 0;
+      this.visualHolder.rotation.z = 0;
+    } else if (!this.isDestroyed) {
       this.handleInput(dt);
       this.updatePhysics(dt);
     } else {
@@ -641,10 +696,10 @@ export class SpaceshipController {
   updateCamera(dt) {
     this.cameraShake = THREE.MathUtils.lerp(this.cameraShake, 0, 1 - Math.exp(-this.cameraShakeDecay * dt));
 
-    // Dynamic FOV based on speed and boost
+    // Dynamic FOV based on speed and boost (opens up wide at high speeds for peripheral velocity rush)
     const speedRatio = Math.min(1.0, Math.abs(this.currentSpeed) / this.boostSpeed);
-    const targetFov = this.isBoosting ? this.boostFov : this.baseFov + speedRatio * 8.0;
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-6 * dt));
+    const targetFov = this.isBoosting ? this.boostFov : this.baseFov + speedRatio * 14.0;
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-7 * dt));
     this.camera.updateProjectionMatrix();
 
     if (this.cameraMode === 0) {
@@ -653,10 +708,13 @@ export class SpaceshipController {
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion);
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.quaternion);
 
+      // Dynamic distance pullback based on speed (simulates G-force surge)
+      const dynamicChaseDist = this.cameraChaseOffset.z + speedRatio * 1.6 + (this.isBoosting ? 0.9 : 0.0);
+
       // Position behind and slightly above
       const idealPos = new THREE.Vector3()
         .copy(this.root.position)
-        .addScaledVector(forward, -this.cameraChaseOffset.z)
+        .addScaledVector(forward, -dynamicChaseDist)
         .addScaledVector(up, this.cameraChaseOffset.y);
 
       const shake = this.cameraShake;
@@ -664,12 +722,13 @@ export class SpaceshipController {
       if (shake > 0.001) 
         idealPos.add(new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, -shake * 0.5));
 
-      // Subtle camera shake on boost
-      if (this.isBoosting) {
+      // Visceral high-speed engine micro-vibration
+      if (speedRatio > 0.15 || this.isBoosting) {
+        const engineVib = 0.025 * speedRatio + (this.isBoosting ? 0.065 : 0.0);
         idealPos.add(new THREE.Vector3(
-          (Math.random() - 0.5) * 0.08,
-          (Math.random() - 0.5) * 0.08,
-          (Math.random() - 0.5) * 0.08
+          (Math.random() - 0.5) * engineVib,
+          (Math.random() - 0.5) * engineVib,
+          (Math.random() - 0.5) * engineVib
         ));
       }
 
@@ -754,12 +813,12 @@ export class SpaceshipController {
 
     // Apply handling parameters
     if (config.handling) {
-      this.maxSpeed = config.handling.maxSpeed ?? this.maxSpeed;
-      this.boostSpeed = config.handling.boostSpeed ?? this.boostSpeed;
+      this.maxSpeed = (config.handling.maxSpeed ?? this.maxSpeed) * 1.18;
+      this.boostSpeed = (config.handling.boostSpeed ?? this.boostSpeed) * 1.25;
       this.reverseSpeed = config.handling.reverseSpeed ?? this.reverseSpeed;
-      this.acceleration = config.handling.acceleration ?? this.acceleration;
+      this.acceleration = (config.handling.acceleration ?? this.acceleration) * 1.25;
       this.deceleration = config.handling.deceleration ?? this.deceleration;
-      this.boostAcceleration = config.handling.boostAcceleration ?? this.boostAcceleration;
+      this.boostAcceleration = (config.handling.boostAcceleration ?? 60.0) * 1.45;
       this.pitchSpeed = config.handling.pitchSpeed ?? this.pitchSpeed;
       this.yawSpeed = config.handling.yawSpeed ?? this.yawSpeed;
       this.rollSpeed = config.handling.rollSpeed ?? this.rollSpeed;

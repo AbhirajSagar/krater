@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>StarSparrow: Multiplayer Spaceship Battle</title>
     <meta name="description" content="High-octane 3D multiplayer spaceship dogfight simulator powered by Three.js and Render backend." />
+    <!-- Google Font: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -13,11 +17,10 @@
     <!-- Minimal Glassmorphic Loading Screen Overlay -->
     <div id="loading-screen" class="loading-screen">
       <div class="glass-card">
-        <div class="glass-percent" id="loading-percent">0%</div>
+        <div class="loading-text" id="loading-text">Loading...</div>
         <div class="glass-bar-track">
           <div class="glass-bar-fill" id="loading-bar-fill"></div>
         </div>
-        <div class="loading-prompt" id="loading-prompt">CLICK ANYWHERE TO START FULLSCREEN</div>
       </div>
     </div>
 

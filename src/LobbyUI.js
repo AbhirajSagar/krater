@@ -28,10 +28,14 @@ export const COLOR_SWATCHES = [
   { key: 'Yellow', name: 'Gold', hex: '#eab308' },
 ];
 
+export const SKYBOX_OPTIONS = [
+  { id: 'purple_nebula', name: 'Purple Nebula', shortName: 'Purple Nebula', color: '#a855f7', glow: 'rgba(168, 85, 247, 0.45)' },
+  { id: 'blue_nebula', name: 'Blue Nebula', shortName: 'Blue Nebula', color: '#00f0ff', glow: 'rgba(0, 240, 255, 0.45)' },
+  { id: 'deep_space', name: 'Deep Space', shortName: 'Deep Space', color: '#94a3b8', glow: 'rgba(148, 163, 184, 0.45)' },
+  { id: 'golden_galaxy', name: 'Golden Galaxy', shortName: 'Golden Galaxy', color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.45)' }
+];
+
 export class LobbyUI {
-  /**
-   * @param {object} options
-   */
   constructor(options = {}) {
     this.client = options.client;
     this.spaceship = options.spaceship;
@@ -40,6 +44,7 @@ export class LobbyUI {
     this.onStartSolo = options.onStartSolo || null;
     this.onEnterBattle = options.onEnterBattle || null;
     this.onLeaveToMenu = options.onLeaveToMenu || null;
+    this.onOpenSettings = options.onOpenSettings || null;
 
     // Load saved settings
     this.callsign = localStorage.getItem('spacegame_callsign') || this.generateRandomCallsign();
@@ -49,6 +54,7 @@ export class LobbyUI {
     this.selectedThemeKey = localStorage.getItem('spacegame_theme_key') || 'Cyan';
 
     this.currentScreen = 'main'; // 'main', 'lobby'
+    this.activeMobileTab = 'menu'; // 'hangar' or 'menu' on smaller screens
     this.isHost = false;
     this.isReady = false;
     this.isLoading = false;
@@ -74,54 +80,86 @@ export class LobbyUI {
     }
     this.root = root;
 
+    const activeSkyboxId = this.skyboxManager?.currentSkybox?.id 
+      || this.skyboxManager?.skyboxes?.[this.skyboxManager?.getStoredIndex?.() || 0]?.id 
+      || 'blue_nebula';
+    const activeSkyboxName = this.skyboxManager?.currentSkybox?.name 
+      || SKYBOX_OPTIONS.find(s => s.id === activeSkyboxId)?.name 
+      || 'Blue Nebula';
+
     this.root.innerHTML = `
-      <!-- ================= MAIN MENU SCREEN (Ship on Left, UI on Right) ================= -->
-      <div class="lobby-screen screen-main screen-split-layout" id="screen-main">
-        <!-- Open left space leaves 3D spaceship visible without obstruction -->
-        <div class="ship-viewport-space" aria-hidden="true"></div>
+      <!-- ================= MAIN MENU SCREEN (Ship Selector on Left, Menu Options on Right) ================= -->
+      <div class="lobby-screen screen-main screen-split-layout tab-${this.activeMobileTab}" id="screen-main">
+        
+        <!-- Mobile Segmented Tab Switcher (Visible on <= 900px screens) -->
+        <div class="mobile-layout-tabs" id="mobile-layout-tabs">
+          <button class="mobile-tab-btn ${this.activeMobileTab === 'hangar' ? 'active' : ''}" id="btn-tab-hangar" type="button">
+            ${Icons.rocket(15)}
+            <span>HANGAR</span>
+          </button>
+          <button class="mobile-tab-btn ${this.activeMobileTab === 'menu' ? 'active' : ''}" id="btn-tab-menu" type="button">
+            ${Icons.compass(15)}
+            <span>MENU</span>
+          </button>
+        </div>
 
-        <!-- Right Side: Clean Organised Glassmorphic Panel -->
-        <aside class="menu-right-panel">
-          <div class="panel-glass-card">
-            <!-- Header: Status indicator -->
-            <div class="panel-top-row">
-              <div class="nav-status" id="nav-status">
-                <span class="status-indicator-dot"></span>
-                <span class="status-indicator-text" id="nav-status-text">Connecting...</span>
-              </div>
-            </div>
-
-            <!-- Pilot Profile: Callsign -->
-            <div class="panel-section">
-              <label for="input-callsign" class="panel-section-label">Callsign</label>
-              <div class="minimal-input-wrap">
-                <input type="text" id="input-callsign" maxlength="16" spellcheck="false" autocomplete="off" value="${this.callsign}" placeholder="Enter callsign" />
-                <button id="btn-random-callsign" class="icon-btn-ghost" title="Generate Random Callsign" aria-label="Random Callsign">
-                  ${Icons.shuffle(15)}
-                </button>
-              </div>
+        <!-- ================= LEFT SIDE: SHIP SELECTOR ================= -->
+        <aside class="menu-left-panel" id="panel-hangar">
+          <div class="arcade-card hangar-arcade-card">
+            <div class="panel-header-badge-row">
+              <span class="arcade-badge">HANGAR</span>
+              <span class="ship-counter-badge" id="ship-counter-badge">01 / 40</span>
             </div>
 
             <!-- Vessel Selection Stepper -->
-            <div class="panel-section">
-              <span class="panel-section-label">Vessel</span>
-              <div class="ship-stepper">
-                <button id="btn-prev-ship" class="icon-btn-ghost stepper-btn" aria-label="Previous Ship">
-                  ${Icons.chevronLeft(16)}
-                </button>
-                <div class="ship-details-text">
-                  <span class="ship-title-text" id="ship-name-val">StarSparrow 1</span>
-                  <span class="ship-class-text" id="ship-class-val">Assault Fighter</span>
+            <div class="ship-selector-hero">
+              <button id="btn-prev-ship" class="arcade-stepper-btn" aria-label="Previous Ship">
+                ${Icons.chevronLeft(20)}
+              </button>
+              <div class="ship-hero-info">
+                <h2 class="ship-title-text" id="ship-name-val">StarSparrow 1</h2>
+              </div>
+              <button id="btn-next-ship" class="arcade-stepper-btn" aria-label="Next Ship">
+                ${Icons.chevronRight(20)}
+              </button>
+            </div>
+
+            <!-- Tactical Specifications -->
+            <div class="ship-specs-container">
+              <div class="spec-row">
+                <div class="spec-header">
+                  <span class="spec-label">SPEED</span>
+                  <span class="spec-val" id="spec-speed-val">55</span>
                 </div>
-                <button id="btn-next-ship" class="icon-btn-ghost stepper-btn" aria-label="Next Ship">
-                  ${Icons.chevronRight(16)}
-                </button>
+                <div class="spec-track">
+                  <div class="spec-fill" id="spec-speed-fill" style="width: 70%;"></div>
+                </div>
+              </div>
+
+              <div class="spec-row">
+                <div class="spec-header">
+                  <span class="spec-label">BOOST</span>
+                  <span class="spec-val" id="spec-boost-val">121</span>
+                </div>
+                <div class="spec-track">
+                  <div class="spec-fill spec-fill-boost" id="spec-boost-fill" style="width: 80%;"></div>
+                </div>
+              </div>
+
+              <div class="spec-row">
+                <div class="spec-header">
+                  <span class="spec-label">AGILITY</span>
+                  <span class="spec-val" id="spec-agility-val">88%</span>
+                </div>
+                <div class="spec-track">
+                  <div class="spec-fill spec-fill-agility" id="spec-agility-fill" style="width: 88%;"></div>
+                </div>
               </div>
             </div>
 
-            <!-- Color Palette Swatches -->
+            <!-- Paint Scheme Swatches -->
             <div class="panel-section">
-              <span class="panel-section-label">Paint Scheme</span>
+              <span class="panel-section-label">PAINT</span>
               <div class="color-swatches-grid" id="color-swatches-grid">
                 ${COLOR_SWATCHES.map(sw => `
                   <button class="color-swatch-circle ${sw.key === this.selectedThemeKey ? 'active' : ''}"
@@ -133,50 +171,223 @@ export class LobbyUI {
                 `).join('')}
               </div>
             </div>
+          </div>
+        </aside>
 
-            <div class="panel-divider"></div>
+        <!-- ================= CENTER: OPEN 3D SHIP VIEWPORT ================= -->
+        <div class="ship-viewport-space" id="ship-viewport-space" aria-hidden="true"></div>
 
-            <!-- Action Buttons -->
-            <div class="panel-section panel-actions-stack">
-              <button id="btn-quick-play" class="btn-primary-solid btn-full">
-                <span class="btn-icon-wrap" id="icon-quick-play">${Icons.play(16)}</span>
-                <span id="text-quick-play">Quick Play</span>
+        <!-- ================= RIGHT SIDE: MAIN NAVIGATION MENU ================= -->
+        <aside class="menu-right-panel" id="panel-menu">
+          <div class="arcade-card main-nav-card">
+            <!-- Pilot Profile Header & Connection Status -->
+            <div class="pilot-profile-card">
+              <div class="pilot-meta-group">
+                <div class="pilot-label-row">
+                  <span class="pilot-card-title">PILOT</span>
+                  <div class="nav-status" id="nav-status">
+                    <span class="status-indicator-dot"></span>
+                    <span class="status-indicator-text" id="nav-status-text">Connected</span>
+                  </div>
+                </div>
+                <div class="minimal-input-wrap">
+                  <input type="text" id="input-callsign" maxlength="16" spellcheck="false" autocomplete="off" value="${this.callsign}" placeholder="Enter callsign" />
+                  <button id="btn-random-callsign" class="icon-btn-ghost" title="Random Callsign" aria-label="Random Callsign">
+                    ${Icons.shuffle(15)}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Environment / Skybox Selection Section -->
+            <div class="menu-skybox-section">
+              <div class="menu-skybox-header">
+                <span class="menu-skybox-title">ENVIRONMENT</span>
+                <span class="menu-skybox-badge" id="menu-skybox-badge">${activeSkyboxName}</span>
+              </div>
+              <div class="menu-skybox-grid" id="menu-skybox-grid">
+                ${SKYBOX_OPTIONS.map(opt => `
+                  <button class="menu-skybox-btn ${opt.id === activeSkyboxId ? 'active' : ''}" 
+                          data-skybox-id="${opt.id}" 
+                          type="button" 
+                          title="${opt.name}">
+                    <span class="menu-skybox-dot" style="background: ${opt.color}; box-shadow: 0 0 8px ${opt.glow};"></span>
+                    <span class="menu-skybox-label">${opt.shortName}</span>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Main Navigation Options Stack (Clean, bold arcade buttons - NO verbose literature) -->
+            <div class="nav-options-stack" id="nav-options-main">
+              <!-- 1. Singleplayer -->
+              <button id="btn-nav-singleplayer" class="arcade-btn arcade-btn-sp" type="button">
+                <span class="arcade-btn-icon">${Icons.rocket(20)}</span>
+                <span class="arcade-btn-label">SINGLEPLAYER</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
               </button>
 
-              <div class="action-grid-buttons">
-                <button id="btn-browse-lobbies" class="btn-glass">
-                  <span class="btn-icon-wrap">${Icons.list(15)}</span>
-                  <span>Browse Rooms</span>
-                </button>
+              <!-- 2. Multiplayer -->
+              <button id="btn-nav-multiplayer" class="arcade-btn arcade-btn-mp" type="button">
+                <span class="arcade-btn-icon">${Icons.users(20)}</span>
+                <span class="arcade-btn-label">MULTIPLAYER</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
+              </button>
 
-                <button id="btn-create-lobby-modal" class="btn-glass">
-                  <span class="btn-icon-wrap">${Icons.plus(15)}</span>
-                  <span>Create Room</span>
-                </button>
+              <!-- 3. Controls -->
+              <button id="btn-nav-controls" class="arcade-btn arcade-btn-sub" type="button">
+                <span class="arcade-btn-icon">${Icons.gamepad(18)}</span>
+                <span class="arcade-btn-label">CONTROLS</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+              </button>
 
-                <button id="btn-join-code-modal" class="btn-glass btn-col-span-2">
-                  <span class="btn-icon-wrap">${Icons.hash(15)}</span>
-                  <span>Join with Room Code</span>
+              <!-- 4. Settings -->
+              <button id="btn-nav-settings" class="arcade-btn arcade-btn-sub" type="button">
+                <span class="arcade-btn-icon">${Icons.settings(18)}</span>
+                <span class="arcade-btn-label">SETTINGS</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+              </button>
+
+              <!-- 5. Credits -->
+              <button id="btn-nav-credits" class="arcade-btn arcade-btn-sub" type="button">
+                <span class="arcade-btn-icon">${Icons.info(18)}</span>
+                <span class="arcade-btn-label">CREDITS</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+              </button>
+            </div>
+
+            <!-- Multiplayer Submenu Options -->
+            <div class="nav-options-stack hidden" id="nav-options-multiplayer">
+              <div class="subnav-header">
+                <button id="btn-multiplayer-back" class="btn-subnav-back" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>BACK</span>
                 </button>
+                <span class="subnav-title">MULTIPLAYER</span>
               </div>
 
-              <button id="btn-solo-practice" class="btn-link-subtle">
-                ${Icons.compass(14)}
-                <span>Singleplayer Practice Flight</span>
+              <!-- Quick Play -->
+              <button id="btn-quick-play" class="arcade-btn arcade-btn-sp" type="button">
+                <span class="arcade-btn-icon" id="icon-quick-play">${Icons.play(18)}</span>
+                <span class="arcade-btn-label" id="text-quick-play">QUICK PLAY</span>
               </button>
+
+              <!-- Browse & Create Grid -->
+              <div class="action-grid-buttons">
+                <button id="btn-browse-lobbies" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.list(15)}</span>
+                  <span class="arcade-btn-label">BROWSE</span>
+                </button>
+
+                <button id="btn-create-lobby-modal" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.plus(15)}</span>
+                  <span class="arcade-btn-label">CREATE</span>
+                </button>
+
+                <button id="btn-join-code-modal" class="arcade-btn arcade-btn-sub btn-col-span-2" type="button">
+                  <span class="arcade-btn-icon">${Icons.hash(15)}</span>
+                  <span class="arcade-btn-label">ROOM CODE</span>
+                </button>
+              </div>
             </div>
           </div>
         </aside>
+      </div>
+
+      <!-- ================= CONTROLS MODAL ================= -->
+      <div class="modal-backdrop hidden" id="modal-controls">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 class="modal-title">CONTROLS</h3>
+            <button class="icon-btn-ghost" id="btn-close-controls" title="Close" aria-label="Close" type="button">
+              ${Icons.x(18)}
+            </button>
+          </div>
+
+          <div class="controls-content-grid">
+            <div class="controls-column">
+              <h4 class="controls-group-title">KEYBOARD CONTROLS</h4>
+              <div class="control-key-item">
+                <span class="control-key-badge">W / S</span>
+                <span class="control-key-desc">Throttle / Reverse</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">A / D</span>
+                <span class="control-key-desc">Turn Left / Right (Bank)</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Up / Down</span>
+                <span class="control-key-desc">Pitch Dive / Climb</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Q / E</span>
+                <span class="control-key-desc">Roll Left / Right</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Space / Shift</span>
+                <span class="control-key-desc">Boost Turbo</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Enter / F</span>
+                <span class="control-key-desc">Fire Lasers</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Esc / O</span>
+                <span class="control-key-desc">Options</span>
+              </div>
+            </div>
+
+            <div class="controls-column">
+              <h4 class="controls-group-title">TOUCH CONTROLS</h4>
+              <div class="control-key-item">
+                <span class="control-key-badge">Left Thumb</span>
+                <span class="control-key-desc">Steering Joystick</span>
+              </div>
+              <div class="control-key-item">
+                <span class="control-key-badge">Right Button</span>
+                <span class="control-key-desc">Laser Fire</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= CREDITS MODAL ================= -->
+      <div class="modal-backdrop hidden" id="modal-credits">
+        <div class="modal-card modal-card-sm">
+          <div class="modal-header">
+            <h3 class="modal-title">CREDITS</h3>
+            <button class="icon-btn-ghost" id="btn-close-credits" title="Close" aria-label="Close" type="button">
+              ${Icons.x(18)}
+            </button>
+          </div>
+
+          <div class="credits-body">
+            <div class="credits-item">
+              <span class="credits-role">Engine</span>
+              <span class="credits-val">Three.js</span>
+            </div>
+            <div class="credits-item">
+              <span class="credits-role">Models</span>
+              <span class="credits-val">StarSparrow Fleet</span>
+            </div>
+            <div class="credits-item">
+              <span class="credits-role">Audio</span>
+              <span class="credits-val">Web Audio API</span>
+            </div>
+            <div class="credits-item">
+              <span class="credits-role">Font</span>
+              <span class="credits-val">Outfit</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ================= PUBLIC ROOMS BROWSER MODAL ================= -->
       <div class="modal-backdrop hidden" id="modal-browser">
         <div class="modal-card">
           <div class="modal-header">
-            <div class="modal-title-group">
-              <h3 class="modal-title">Active Rooms</h3>
-              <span class="modal-subtitle">Browse and join open matches</span>
-            </div>
+            <h3 class="modal-title">ROOMS</h3>
             <div class="modal-header-actions">
               <button class="icon-btn-ghost" id="btn-browser-refresh" title="Refresh" aria-label="Refresh">
                 ${Icons.refresh(16)}
@@ -214,10 +425,7 @@ export class LobbyUI {
       <div class="modal-backdrop hidden" id="modal-create">
         <div class="modal-card modal-card-sm">
           <div class="modal-header">
-            <div class="modal-title-group">
-              <h3 class="modal-title">Create Room</h3>
-              <span class="modal-subtitle">Configure match parameters</span>
-            </div>
+            <h3 class="modal-title">CREATE ROOM</h3>
             <button class="icon-btn-ghost" id="btn-close-create" title="Close" aria-label="Close">
               ${Icons.x(18)}
             </button>
@@ -273,10 +481,7 @@ export class LobbyUI {
       <div class="modal-backdrop hidden" id="modal-join-code">
         <div class="modal-card modal-card-sm">
           <div class="modal-header">
-            <div class="modal-title-group">
-              <h3 class="modal-title">Join by Code</h3>
-              <span class="modal-subtitle">Enter 6-character room code</span>
-            </div>
+            <h3 class="modal-title">JOIN ROOM</h3>
             <button class="icon-btn-ghost" id="btn-close-join-code" title="Close" aria-label="Close">
               ${Icons.x(18)}
             </button>
@@ -354,34 +559,68 @@ export class LobbyUI {
     `;
 
     // Cache elements
-    this.navStatus = document.getElementById('nav-status');
-    this.navStatusText = document.getElementById('nav-status-text');
+    this.screenMain = document.getElementById('screen-main');
+    this.panelHangar = document.getElementById('panel-hangar');
+    this.panelMenu = document.getElementById('panel-menu');
 
-    this.inputCallsign = document.getElementById('input-callsign');
-    this.btnRandomCallsign = document.getElementById('btn-random-callsign');
+    // Mobile tabs
+    this.btnTabHangar = document.getElementById('btn-tab-hangar');
+    this.btnTabMenu = document.getElementById('btn-tab-menu');
 
+    // Left Panel Hangar elements
+    this.shipCounterEl = document.getElementById('ship-counter-badge');
     this.shipNameEl = document.getElementById('ship-name-val');
-    this.shipClassEl = document.getElementById('ship-class-val');
     this.btnPrevShip = document.getElementById('btn-prev-ship');
     this.btnNextShip = document.getElementById('btn-next-ship');
     this.colorSwatchesGrid = document.getElementById('color-swatches-grid');
 
+    // Tactical Specs elements
+    this.specSpeedVal = document.getElementById('spec-speed-val');
+    this.specSpeedFill = document.getElementById('spec-speed-fill');
+    this.specBoostVal = document.getElementById('spec-boost-val');
+    this.specBoostFill = document.getElementById('spec-boost-fill');
+    this.specAgilityVal = document.getElementById('spec-agility-val');
+    this.specAgilityFill = document.getElementById('spec-agility-fill');
+
+    // Right Panel Navigation elements
+    this.navStatus = document.getElementById('nav-status');
+    this.navStatusText = document.getElementById('nav-status-text');
+    this.inputCallsign = document.getElementById('input-callsign');
+    this.btnRandomCallsign = document.getElementById('btn-random-callsign');
+
+    this.navOptionsMain = document.getElementById('nav-options-main');
+    this.navOptionsMultiplayer = document.getElementById('nav-options-multiplayer');
+    this.btnNavSingleplayer = document.getElementById('btn-nav-singleplayer');
+    this.btnNavMultiplayer = document.getElementById('btn-nav-multiplayer');
+    this.btnMultiplayerBack = document.getElementById('btn-multiplayer-back');
+    this.btnNavControls = document.getElementById('btn-nav-controls');
+    this.btnNavSettings = document.getElementById('btn-nav-settings');
+    this.btnNavCredits = document.getElementById('btn-nav-credits');
+
+    // Multiplayer actions
     this.btnQuickPlay = document.getElementById('btn-quick-play');
     this.iconQuickPlay = document.getElementById('icon-quick-play');
     this.textQuickPlay = document.getElementById('text-quick-play');
-
     this.btnBrowseLobbies = document.getElementById('btn-browse-lobbies');
     this.btnCreateLobbyModal = document.getElementById('btn-create-lobby-modal');
     this.btnJoinCodeModal = document.getElementById('btn-join-code-modal');
-    this.btnSoloPractice = document.getElementById('btn-solo-practice');
 
-    // Modals
+    // Controls Modal
+    this.modalControls = document.getElementById('modal-controls');
+    this.btnCloseControls = document.getElementById('btn-close-controls');
+
+    // Credits Modal
+    this.modalCredits = document.getElementById('modal-credits');
+    this.btnCloseCredits = document.getElementById('btn-close-credits');
+
+    // Browser Modal
     this.modalBrowser = document.getElementById('modal-browser');
     this.btnCloseBrowser = document.getElementById('btn-close-browser');
     this.btnBrowserRefresh = document.getElementById('btn-browser-refresh');
     this.inputBrowserSearch = document.getElementById('input-browser-search');
     this.browserTbody = document.getElementById('browser-tbody');
 
+    // Create Modal
     this.modalCreate = document.getElementById('modal-create');
     this.btnCloseCreate = document.getElementById('btn-close-create');
     this.btnCancelCreate = document.getElementById('btn-cancel-create');
@@ -390,6 +629,7 @@ export class LobbyUI {
     this.createBtnIcon = document.getElementById('create-btn-icon');
     this.createBtnText = document.getElementById('create-btn-text');
 
+    // Join Code Modal
     this.modalJoinCode = document.getElementById('modal-join-code');
     this.btnCloseJoinCode = document.getElementById('btn-close-join-code');
     this.btnCancelJoinCode = document.getElementById('btn-cancel-join-code');
@@ -400,7 +640,6 @@ export class LobbyUI {
     this.joinCodeBtnText = document.getElementById('join-code-btn-text');
 
     // Staging
-    this.screenMain = document.getElementById('screen-main');
     this.screenStaging = document.getElementById('screen-staging');
     this.stagingRoomName = document.getElementById('staging-room-name');
     this.stagingRoomCode = document.getElementById('staging-room-code');
@@ -421,7 +660,18 @@ export class LobbyUI {
   }
 
   setupListeners() {
-    // Callsign
+    // Mobile Tab Switcher
+    this.btnTabHangar?.addEventListener('click', () => {
+      sounds.playClick();
+      this.setActiveMobileTab('hangar');
+    });
+
+    this.btnTabMenu?.addEventListener('click', () => {
+      sounds.playClick();
+      this.setActiveMobileTab('menu');
+    });
+
+    // Callsign input
     this.inputCallsign?.addEventListener('input', (e) => {
       this.callsign = e.target.value.trim() || 'Pilot';
       localStorage.setItem('spacegame_callsign', this.callsign);
@@ -446,6 +696,96 @@ export class LobbyUI {
           this.selectColorTheme(themeKey);
         }
       });
+    });
+
+    // Environment Skybox Selection in right side menu
+    this.skyboxGrid = document.getElementById('menu-skybox-grid');
+    this.skyboxBadge = document.getElementById('menu-skybox-badge');
+
+    this.skyboxGrid?.querySelectorAll('.menu-skybox-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        sounds.playClick();
+        const skyboxId = btn.getAttribute('data-skybox-id');
+        if (skyboxId) {
+          this.selectSkybox(skyboxId);
+        }
+      });
+    });
+
+    // Sync when create-skybox select in Create modal changes
+    document.getElementById('create-skybox')?.addEventListener('change', (e) => {
+      this.selectSkybox(e.target.value);
+    });
+
+    // Listen to changes from SkyboxManager (e.g. sequential advance on match end)
+    if (this.skyboxManager && typeof this.skyboxManager.onSkyboxChange === 'function') {
+      this.skyboxManager.onSkyboxChange((skybox) => {
+        if (skybox && skybox.id) {
+          this.updateActiveSkyboxUI(skybox.id, skybox.name);
+        }
+      });
+    }
+
+    // Navigation: Singleplayer
+    this.btnNavSingleplayer?.addEventListener('click', () => {
+      sounds.playClick();
+      if (this.onStartSolo) this.onStartSolo();
+    });
+
+    // Navigation: Multiplayer Toggle Submenu
+    this.btnNavMultiplayer?.addEventListener('click', () => {
+      sounds.playClick();
+      this.navOptionsMain?.classList.add('hidden');
+      this.navOptionsMultiplayer?.classList.remove('hidden');
+    });
+
+    this.btnMultiplayerBack?.addEventListener('click', () => {
+      sounds.playClick();
+      this.navOptionsMultiplayer?.classList.add('hidden');
+      this.navOptionsMain?.classList.remove('hidden');
+    });
+
+    // Navigation: Controls Modal
+    this.btnNavControls?.addEventListener('click', () => {
+      sounds.playClick();
+      this.modalControls?.classList.remove('hidden');
+    });
+
+    this.btnCloseControls?.addEventListener('click', () => {
+      this.modalControls?.classList.add('hidden');
+    });
+
+    this.modalControls?.addEventListener('click', (e) => {
+      if (e.target === this.modalControls) {
+        this.modalControls.classList.add('hidden');
+      }
+    });
+
+    // Navigation: Settings
+    this.btnNavSettings?.addEventListener('click', () => {
+      sounds.playClick();
+      if (this.onOpenSettings) {
+        this.onOpenSettings();
+      } else {
+        const optionsToggle = document.getElementById('btn-options-toggle');
+        if (optionsToggle) optionsToggle.click();
+      }
+    });
+
+    // Navigation: Credits Modal
+    this.btnNavCredits?.addEventListener('click', () => {
+      sounds.playClick();
+      this.modalCredits?.classList.remove('hidden');
+    });
+
+    this.btnCloseCredits?.addEventListener('click', () => {
+      this.modalCredits?.classList.add('hidden');
+    });
+
+    this.modalCredits?.addEventListener('click', (e) => {
+      if (e.target === this.modalCredits) {
+        this.modalCredits.classList.add('hidden');
+      }
     });
 
     // Quick Play
@@ -477,7 +817,11 @@ export class LobbyUI {
 
     // Create Room Modal
     this.btnCreateLobbyModal?.addEventListener('click', () => {
-      sounds.playClick();
+      const currentId = this.skyboxManager?.currentSkybox?.id;
+      if (currentId) {
+        const sel = document.getElementById('create-skybox');
+        if (sel) sel.value = currentId;
+      }
       this.modalCreate?.classList.remove('hidden');
     });
 
@@ -515,12 +859,6 @@ export class LobbyUI {
       if (code) await this.handleJoinRoom(code);
     });
 
-    // Solo Flight
-    this.btnSoloPractice?.addEventListener('click', () => {
-      sounds.playClick();
-      if (this.onStartSolo) this.onStartSolo();
-    });
-
     // Staging Actions
     this.btnCopyLink?.addEventListener('click', () => {
       sounds.playClick();
@@ -553,6 +891,49 @@ export class LobbyUI {
     });
   }
 
+  setActiveMobileTab(tab) {
+    this.activeMobileTab = tab;
+    if (this.screenMain) {
+      this.screenMain.classList.remove('tab-hangar', 'tab-menu');
+      this.screenMain.classList.add(`tab-${tab}`);
+    }
+    if (this.btnTabHangar) {
+      this.btnTabHangar.classList.toggle('active', tab === 'hangar');
+    }
+    if (this.btnTabMenu) {
+      this.btnTabMenu.classList.toggle('active', tab === 'menu');
+    }
+  }
+
+  updateShipDisplay() {
+    const config = SPACESHIP_CONFIGS[this.selectedShipIndex] || SPACESHIP_CONFIGS[0];
+    if (this.shipNameEl) this.shipNameEl.textContent = config.name;
+
+    if (this.shipCounterEl) {
+      const idxStr = String(this.selectedShipIndex + 1).padStart(2, '0');
+      this.shipCounterEl.textContent = `${idxStr} / ${SPACESHIP_CONFIGS.length}`;
+    }
+
+    // Dynamic handling specs calculation
+    const handling = config.handling || {};
+    const maxSpeed = handling.maxSpeed || 50;
+    const boostSpeed = handling.boostSpeed || 110;
+    const rollSpeed = handling.rollSpeed || 1.35;
+
+    const speedPct = Math.min(100, Math.max(25, Math.round((maxSpeed / 70) * 100)));
+    const boostPct = Math.min(100, Math.max(30, Math.round((boostSpeed / 140) * 100)));
+    const agilityPct = Math.min(100, Math.max(30, Math.round((rollSpeed / 1.6) * 100)));
+
+    if (this.specSpeedVal) this.specSpeedVal.textContent = `${Math.round(maxSpeed)} m/s`;
+    if (this.specSpeedFill) this.specSpeedFill.style.width = `${speedPct}%`;
+
+    if (this.specBoostVal) this.specBoostVal.textContent = `${Math.round(boostSpeed)} m/s`;
+    if (this.specBoostFill) this.specBoostFill.style.width = `${boostPct}%`;
+
+    if (this.specAgilityVal) this.specAgilityVal.textContent = `${agilityPct}%`;
+    if (this.specAgilityFill) this.specAgilityFill.style.width = `${agilityPct}%`;
+  }
+
   showToast(message, type = 'info') {
     if (!this.toastContainer) return;
     const toast = document.createElement('div');
@@ -580,17 +961,19 @@ export class LobbyUI {
   }
 
   cycleShip(delta) {
+    // Player cannot change ship during active gameplay or outside main menu
+    if (this.currentScreen !== 'main' || (this.spaceship && this.spaceship.enabled)) {
+      return;
+    }
+
     sounds.playClick();
     this.selectedShipIndex = (this.selectedShipIndex + delta + SPACESHIP_CONFIGS.length) % SPACESHIP_CONFIGS.length;
     localStorage.setItem('spacegame_ship_index', this.selectedShipIndex);
     this.updateShipDisplay();
 
-    // Live update 3D ship in background
+    // Live update 3D ship in background without jarring position resets
     if (this.spaceship && typeof this.spaceship.selectShip === 'function') {
       this.spaceship.selectShip(this.selectedShipIndex).then(() => {
-        if (!this.spaceship.enabled) {
-          this.spaceship.root.position.set(-1.8, -0.15, 0);
-        }
         // Re-apply selected color theme to newly loaded model
         this.selectColorTheme(this.selectedThemeKey, false);
       }).catch(err => {
@@ -603,11 +986,17 @@ export class LobbyUI {
       this.client.updatePlayerState({
         shipIndex: this.selectedShipIndex,
         shipName: cfg.name,
+        themeKey: this.selectedThemeKey
       });
     }
   }
 
   selectColorTheme(themeKey, playSound = true) {
+    // Player cannot change color during active gameplay or outside main menu
+    if (this.currentScreen !== 'main' || (this.spaceship && this.spaceship.enabled)) {
+      return;
+    }
+
     if (playSound) sounds.playClick();
     this.selectedThemeKey = themeKey;
     localStorage.setItem('spacegame_theme_key', themeKey);
@@ -621,12 +1010,46 @@ export class LobbyUI {
     if (this.spaceship && typeof this.spaceship.setColorTheme === 'function') {
       this.spaceship.setColorTheme(themeKey);
     }
+
+    if (this.client && this.client.room) {
+      this.client.updatePlayerState({
+        themeKey: this.selectedThemeKey
+      });
+    }
   }
 
-  updateShipDisplay() {
-    const config = SPACESHIP_CONFIGS[this.selectedShipIndex] || SPACESHIP_CONFIGS[0];
-    if (this.shipNameEl) this.shipNameEl.textContent = config.name;
-    if (this.shipClassEl) this.shipClassEl.textContent = config.class || 'Assault Fighter';
+  selectSkybox(skyboxId) {
+    if (!this.skyboxManager) return;
+    this.skyboxManager.loadById(skyboxId).catch(err => {
+      console.warn('Failed to load skybox:', err);
+    });
+    this.updateActiveSkyboxUI(skyboxId);
+  }
+
+  updateActiveSkyboxUI(skyboxId, skyboxName = null) {
+    if (!skyboxId) return;
+    const grid = document.getElementById('menu-skybox-grid');
+    if (grid) {
+      grid.querySelectorAll('.menu-skybox-btn').forEach(btn => {
+        if (btn.getAttribute('data-skybox-id') === skyboxId) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    const badge = document.getElementById('menu-skybox-badge');
+    if (badge) {
+      const match = SKYBOX_OPTIONS.find(s => s.id === skyboxId);
+      badge.textContent = skyboxName || (match ? match.name : skyboxId);
+    }
+
+    // Also sync the dropdown in Create Room modal if present
+    const createSelect = document.getElementById('create-skybox');
+    if (createSelect && createSelect.value !== skyboxId) {
+      createSelect.value = skyboxId;
+    }
   }
 
   checkDeepLink() {
@@ -663,6 +1086,10 @@ export class LobbyUI {
     try {
       await this.ensureConnected();
 
+      const defaultSkybox = this.skyboxManager
+        ? (this.skyboxManager.currentSkybox?.id || this.skyboxManager.getNextSequentialSkyboxId())
+        : 'blue_nebula';
+
       const res = await this.client.quickJoin({
         player: {
           name: this.callsign,
@@ -677,7 +1104,7 @@ export class LobbyUI {
           gameType: 'spacebattle',
           maxPlayers: 8,
           customData: {
-            skybox: 'blue_nebula',
+            skybox: defaultSkybox,
             gameMode: 'Dogfight'
           }
         }
@@ -724,7 +1151,10 @@ export class LobbyUI {
     try {
       const name = document.getElementById('create-room-name')?.value?.trim() || `${this.callsign}'s Game`;
       const maxPlayers = parseInt(document.getElementById('create-max-players')?.value || '8', 10);
-      const skybox = document.getElementById('create-skybox')?.value || 'blue_nebula';
+      const defaultSkybox = this.skyboxManager
+        ? (this.skyboxManager.currentSkybox?.id || this.skyboxManager.getNextSequentialSkyboxId())
+        : 'blue_nebula';
+      const skybox = document.getElementById('create-skybox')?.value || defaultSkybox;
       const isPrivate = document.getElementById('create-is-private')?.checked || false;
 
       await this.ensureConnected();
@@ -858,7 +1288,7 @@ export class LobbyUI {
       const isMe = p.id === this.client.playerId;
       const isPlayerHost = p.id === room.hostId;
       const isReady = p.ready;
-      const shipName = p.customData?.shipName || 'StarSparrow';
+      const shipName = p.state?.shipName || p.customData?.shipName || (typeof p.state?.shipIndex === 'number' ? SPACESHIP_CONFIGS[p.state.shipIndex]?.name : 'StarSparrow');
 
       return `
         <div class="roster-pill-row ${isMe ? 'is-me' : ''}">
@@ -931,6 +1361,8 @@ export class LobbyUI {
     this.currentScreen = 'main';
     this.screenStaging?.classList.add('hidden');
     this.screenMain?.classList.remove('hidden');
+    this.navOptionsMain?.classList.remove('hidden');
+    this.navOptionsMultiplayer?.classList.add('hidden');
     this.root.classList.add('visible');
     if (this.onLeaveToMenu) {
       this.onLeaveToMenu();

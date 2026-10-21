@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -5,6 +7,11 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body, button, input, select, textarea {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 html, body {
@@ -43,8 +50,8 @@ html, body {
   transition: opacity 0.6s ease;
 }
 
-/* Display only on touch screens / small screens */
-@media (max-width: 900px), (pointer: coarse) {
+/* Display only on mobile touch screens */
+@media (pointer: coarse) and (hover: none) {
   #touch-controls {
     display: block;
   }
@@ -197,25 +204,15 @@ html, body {
 }
 
 /* =========================================================
-   SCI-FI HUD COMBAT CROSSHAIR
+   SCI-FI HUD COMBAT CROSSHAIR (Hidden during gameplay per user specification)
    ========================================================= */
 
-.crosshair-container {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.6s ease;
-}
-
-.crosshair-container.visible {
-  opacity: 1;
+.crosshair-container,
+#crosshair-container {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .crosshair-hud {
@@ -395,21 +392,21 @@ html, body {
   gap: 20px;
 }
 
-/* Minimal Percentage Number */
-.glass-percent {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
-  font-size: 36px;
-  font-weight: 300;
-  letter-spacing: -0.5px;
+/* Clean "Loading..." Text Only */
+.loading-text {
+  font-family: 'Outfit', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
   color: #ffffff;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  text-align: center;
   line-height: 1;
 }
 
 /* Minimal Loading Bar */
 .glass-bar-track {
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 9999px;
   overflow: hidden;
@@ -419,48 +416,10 @@ html, body {
 .glass-bar-fill {
   height: 100%;
   width: 0%;
-  background: #ffffff;
+  background: linear-gradient(90deg, #00f0ff 0%, #38bdf8 100%);
   border-radius: 9999px;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 12px #00f0ff;
   transition: width 0.15s ease-out;
-}
-
-/* Click anywhere to start prompt */
-.loading-screen.ready {
-  cursor: pointer;
-}
-
-.loading-prompt {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.85);
-  text-transform: uppercase;
-  text-align: center;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
-  line-height: 1.4;
-}
-
-.loading-prompt.visible {
-  opacity: 1;
-  transform: translateY(0);
-  animation: pulsePrompt 2s infinite ease-in-out;
-}
-
-@keyframes pulsePrompt {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(0.98);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.02);
-    text-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
-  }
 }
 
 /* =========================================================
@@ -470,26 +429,26 @@ html, body {
 /* Options Toggle Button (Top-Right) */
 .options-toggle-btn {
   position: fixed;
-  top: 22px;
-  right: 22px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  top: 20px;
+  right: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(0, 240, 255, 0.4);
+  background: rgba(8, 12, 20, 0.75);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  color: rgba(255, 255, 255, 0.7);
+  color: #00f0ff;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   outline: none;
-  z-index: 60;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(0, 240, 255, 0.2);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.5s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  transition: opacity 0.4s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .options-toggle-btn.visible {
@@ -498,14 +457,15 @@ html, body {
 }
 
 .options-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 240, 255, 0.2);
   color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.25);
-  transform: scale(1.06);
+  border-color: #00f0ff;
+  transform: scale(1.08);
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.55);
 }
 
 .options-toggle-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 /* Dialog Overlay Backdrop */
@@ -548,7 +508,7 @@ html, body {
   flex-direction: column;
   gap: 18px;
   color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: 'Outfit', sans-serif;
   user-select: none;
 }
 
@@ -655,6 +615,17 @@ html, body {
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
 }
 
+.btn-leave-arena {
+  color: #ff4d6d !important;
+  border-color: rgba(255, 77, 109, 0.4) !important;
+}
+
+.btn-leave-arena:hover {
+  background: rgba(255, 77, 109, 0.15) !important;
+  border-color: #ff4d6d !important;
+  box-shadow: 0 0 12px rgba(255, 77, 109, 0.4) !important;
+}
+
 /* Placeholder for future options */
 .dialog-section-placeholder {
   padding: 12px 14px;
@@ -743,7 +714,7 @@ html, body {
 }
 
 .record-label {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.6px;
@@ -752,7 +723,7 @@ html, body {
 }
 
 .record-quality {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -818,16 +789,16 @@ html, body {
    ========================================================= */
 
 :root {
-  --glass-bg: rgba(10, 12, 16, 0.65);
-  --glass-bg-elevated: rgba(14, 16, 22, 0.78);
+  --glass-bg: rgba(10, 12, 16, 0.68);
+  --glass-bg-elevated: rgba(13, 16, 23, 0.82);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-border-subtle: rgba(255, 255, 255, 0.08);
   --glass-hover: rgba(255, 255, 255, 0.08);
   --text-main: #ffffff;
-  --text-dim: rgba(255, 255, 255, 0.68);
-  --text-muted: rgba(255, 255, 255, 0.42);
-  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace;
+  --text-dim: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.45);
+  --font-system: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'Outfit', ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace;
 }
 
 .hidden {
@@ -942,7 +913,7 @@ html, body {
 }
 
 /* =========================================================
-   SPLIT SCREEN MENU (Ship on Left, UI on Right)
+   SPLIT SCREEN MENU (Ship Selector on Left, Menu on Right)
    ========================================================= */
 
 .screen-split-layout {
@@ -950,10 +921,330 @@ html, body {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  padding: 40px 64px;
-  background: radial-gradient(circle at 35% 50%, rgba(0, 0, 0, 0.05) 0%, rgba(3, 4, 8, 0.75) 100%);
+  padding: 36px 54px;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.08) 0%, rgba(3, 4, 8, 0.85) 100%);
   pointer-events: none;
+  overflow: hidden;
+  position: relative;
 }
+
+/* Mobile Segmented Tab Switcher (Visible on <= 900px screens) */
+.mobile-layout-tabs {
+  display: none;
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  background: rgba(12, 14, 20, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 9999px;
+  padding: 4px;
+  gap: 4px;
+  pointer-events: auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.mobile-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.mobile-tab-btn.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
+}
+
+/* =========================================================
+   LEFT SIDE: SHIP SELECTOR HANGAR PANEL
+   ========================================================= */
+
+.menu-left-panel {
+  width: 360px;
+  max-width: 100%;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  pointer-events: auto;
+  z-index: 10;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  animation: panelSlideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes panelSlideLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* =========================================================
+   ARCADE HUD CARDS (Chamfered geometry, sci-fi hull plating)
+   ========================================================= */
+
+.arcade-card {
+  background: linear-gradient(180deg, rgba(14, 18, 28, 0.95) 0%, rgba(8, 10, 16, 0.97) 100%);
+  border: 1.5px solid rgba(0, 240, 255, 0.28);
+  clip-path: polygon(0 14px, 14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 25px rgba(0, 240, 255, 0.08);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.hangar-arcade-card {
+  border-color: rgba(0, 240, 255, 0.32);
+}
+
+.main-nav-card {
+  border-color: rgba(255, 0, 128, 0.32);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 25px rgba(255, 0, 128, 0.08);
+}
+
+.panel-header-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hangar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-system);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  padding: 4px 10px;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+.ship-counter-badge {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffbf00;
+  font-family: var(--font-mono);
+  background: rgba(255, 191, 0, 0.1);
+  border: 1px solid rgba(255, 191, 0, 0.35);
+  padding: 3px 8px;
+  letter-spacing: 1.5px;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+  text-shadow: 0 0 8px rgba(255, 191, 0, 0.5);
+}
+
+/* =========================================================
+   VESSEL SELECTOR HERO (Tactical Steppers & Display)
+   ========================================================= */
+
+.ship-selector-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: rgba(6, 8, 14, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 14px 18px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.75);
+}
+
+.arcade-stepper-btn {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #1e263a 0%, #101522 100%);
+  border: 1.5px solid rgba(0, 240, 255, 0.5);
+  color: #00f0ff;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #070a12, 0 0 12px rgba(0, 240, 255, 0.25);
+  clip-path: polygon(0 6px, 6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  transition: all 0.12s ease;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.arcade-stepper-btn:hover {
+  background: #00f0ff;
+  color: #000000;
+  box-shadow: 0 4px 0 #008899, 0 0 18px rgba(0, 240, 255, 0.7);
+  transform: translateY(-2px);
+}
+
+.arcade-stepper-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #008899;
+}
+
+.ship-hero-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1;
+  min-width: 150px;
+  padding: 2px 10px;
+}
+
+.ship-hero-info .ship-title-text {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #ffffff;
+  line-height: 1.25;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+/* =========================================================
+   TACTICAL SPECS (Arcade Energy Gauges)
+   ========================================================= */
+
+.ship-specs-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(6, 8, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 14px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+.spec-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.spec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.spec-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.spec-val {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+.spec-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px));
+  overflow: hidden;
+  position: relative;
+}
+
+.spec-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f0ff 0%, #38bdf8 100%);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px #00f0ff;
+}
+
+.spec-fill-boost {
+  background: linear-gradient(90deg, #ff8c00 0%, #ffbf00 100%);
+  box-shadow: 0 0 10px #ff8c00;
+}
+
+.spec-fill-agility {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 0 10px #10b981;
+}
+
+/* =========================================================
+   PAINT SCHEME SWATCHES
+   ========================================================= */
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.panel-section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 800;
+  display: block;
+}
+
+.color-swatches-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.color-swatch-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.color-swatch-circle:hover {
+  transform: scale(1.18);
+  border-color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.color-swatch-circle.active {
+  transform: scale(1.24);
+  border-color: #00f0ff;
+  box-shadow: 0 0 0 2px #000000, 0 0 14px #00f0ff;
+}
+
+/* =========================================================
+   CENTER VIEWPORT (3D Ship)
+   ========================================================= */
 
 .ship-viewport-space {
   flex: 1;
@@ -961,11 +1252,19 @@ html, body {
   pointer-events: none;
 }
 
+/* =========================================================
+   RIGHT SIDE: MAIN NAVIGATION MENU PANEL
+   ========================================================= */
+
 .menu-right-panel {
-  width: 380px;
+  width: 370px;
   max-width: 100%;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
   pointer-events: auto;
   z-index: 10;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   animation: panelSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -980,66 +1279,70 @@ html, body {
   }
 }
 
-.panel-glass-card {
-  background: var(--glass-bg-elevated);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(28px) saturate(140%);
-  -webkit-backdrop-filter: blur(28px) saturate(140%);
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+/* Pilot Profile Header & Status */
+.pilot-profile-card {
+  background: rgba(6, 8, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 14px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 
-.panel-top-row {
+.pilot-meta-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pilot-label-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
-.panel-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.panel-section-label {
+.pilot-card-title {
   font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ff007f;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  font-weight: 600;
-  display: block;
 }
 
-.panel-divider {
-  height: 1px;
-  background: var(--glass-border-subtle);
-  margin: 2px 0;
-}
-
-.panel-actions-stack {
+.nav-status {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.status-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseRecDot 1.5s infinite;
 }
 
 .minimal-input-wrap {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: 8px;
-  padding: 4px 6px 4px 12px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1.5px solid rgba(0, 240, 255, 0.3);
+  padding: 6px 10px;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   width: 100%;
 }
 
 .minimal-input-wrap:focus-within {
-  border-color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: #00f0ff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.4);
 }
 
 .minimal-input-wrap input {
@@ -1047,89 +1350,290 @@ html, body {
   border: none;
   outline: none;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   flex: 1;
   min-width: 0;
 }
 
-.ship-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: 8px;
-  padding: 6px 8px;
-}
+/* =========================================================
+   ENVIRONMENT / SKYBOX SELECTOR IN RIGHT MENU
+   ========================================================= */
 
-.stepper-btn {
-  padding: 4px;
-}
-
-.ship-details-text {
+.menu-skybox-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 115px;
-  text-align: center;
+  gap: 8px;
+  background: rgba(6, 8, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 10px 12px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 
-.ship-title-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #ffffff;
-  line-height: 1.2;
-}
-
-.ship-class-text {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-/* Color Swatches Grid */
-.color-swatches-grid {
+.menu-skybox-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.menu-skybox-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #00f0ff;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.menu-skybox-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 2px 7px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.menu-skybox-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
-  padding: 4px 2px;
 }
 
-.color-swatch-circle {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
+.menu-skybox-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
   cursor: pointer;
-  padding: 0;
   outline: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.color-swatch-circle:hover {
-  transform: scale(1.2);
+.menu-skybox-btn:hover {
+  background: rgba(14, 20, 34, 0.9);
+  border-color: rgba(0, 240, 255, 0.5);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
-.color-swatch-circle.active {
-  transform: scale(1.25);
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.8), 0 0 0 4px #ffffff;
+.menu-skybox-btn.active {
+  background: rgba(0, 240, 255, 0.14);
+  border-color: #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.25), inset 0 0 8px rgba(0, 240, 255, 0.12);
 }
 
-/* Action Buttons Grid */
+.menu-skybox-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.menu-skybox-btn:hover .menu-skybox-dot,
+.menu-skybox-btn.active .menu-skybox-dot {
+  transform: scale(1.3);
+}
+
+.menu-skybox-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   ARCADE ACTION BUTTONS (Chunky, tactile, energetic)
+   ========================================================= */
+
+.nav-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.arcade-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.arcade-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+.arcade-btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+.arcade-btn-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.arcade-btn:hover .arcade-btn-chevron {
+  transform: translateX(4px);
+  opacity: 1;
+}
+
+/* 1. SINGLEPLAYER BUTTON (Hyper Cyan Arcade Fighter) */
+.arcade-btn-sp {
+  background: linear-gradient(135deg, #00f0ff 0%, #0088ff 100%);
+  color: #020814;
+  font-weight: 900;
+  box-shadow: 0 5px 0 #005080, 0 8px 24px rgba(0, 240, 255, 0.35);
+}
+
+.arcade-btn-sp:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+  box-shadow: 0 5px 0 #005080, 0 10px 30px rgba(0, 240, 255, 0.6);
+}
+
+.arcade-btn-sp:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #005080, 0 4px 12px rgba(0, 240, 255, 0.4);
+}
+
+/* 2. MULTIPLAYER BUTTON (Hot Laser Magenta) */
+.arcade-btn-mp {
+  background: linear-gradient(135deg, #ff007f 0%, #8800cc 100%);
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 5px 0 #550033, 0 8px 24px rgba(255, 0, 128, 0.35);
+}
+
+.arcade-btn-mp:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.12);
+  box-shadow: 0 5px 0 #550033, 0 10px 30px rgba(255, 0, 128, 0.6);
+}
+
+.arcade-btn-mp:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #550033, 0 4px 12px rgba(255, 0, 128, 0.4);
+}
+
+/* 3. SECONDARY CONTROLS, SETTINGS, CREDITS (Gunmetal Hull Armor) */
+.arcade-btn-sub {
+  background: linear-gradient(180deg, rgba(28, 36, 52, 0.95) 0%, rgba(16, 21, 32, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  box-shadow: 0 4px 0 #070a12, 0 4px 14px rgba(0, 0, 0, 0.6);
+}
+
+.arcade-btn-sub:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(180deg, rgba(38, 48, 70, 0.95) 0%, rgba(22, 30, 44, 0.95) 100%);
+  border-color: rgba(0, 240, 255, 0.5);
+  color: #00f0ff;
+  box-shadow: 0 4px 0 #070a12, 0 0 18px rgba(0, 240, 255, 0.3);
+}
+
+.arcade-btn-sub:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #070a12;
+}
+
+/* =========================================================
+   MULTIPLAYER SUBMENU
+   ========================================================= */
+
+.subnav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid rgba(255, 0, 128, 0.3);
+}
+
+.btn-subnav-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  padding: 5px 12px;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  transition: all 0.15s ease;
+}
+
+.btn-subnav-back:hover {
+  background: #ff007f;
+  color: #ffffff;
+  border-color: #ff007f;
+  box-shadow: 0 0 12px #ff007f;
+}
+
+.subnav-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ff007f;
+  text-shadow: 0 0 8px rgba(255, 0, 128, 0.6);
+}
+
 .action-grid-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.action-grid-buttons .btn-glass {
+.action-grid-buttons .arcade-btn-sub {
   justify-content: center;
-  padding: 9px 12px;
+  padding: 11px 12px;
   font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.action-grid-buttons .arcade-btn-icon {
+  margin-right: 6px;
+  width: 20px;
+  height: 20px;
 }
 
 .btn-full {
@@ -1147,113 +1651,117 @@ html, body {
   justify-content: center;
 }
 
+/* Primary Solid Action Buttons */
 .btn-primary-solid {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  background: #ffffff;
+  gap: 8px;
+  background: #00f0ff;
   color: #000000;
-  border: 1px solid #ffffff;
-  border-radius: 8px;
-  padding: 9px 18px;
+  border: none;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  padding: 10px 20px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: 1px;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+  box-shadow: 0 4px 0 #008899, 0 0 14px rgba(0, 240, 255, 0.4);
+  transition: all 0.15s ease;
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .btn-primary-solid:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 4px 0 #999999, 0 0 18px rgba(255, 255, 255, 0.6);
+  transform: translateY(-2px);
+}
+
+.btn-primary-solid:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #008899;
 }
 
 .btn-primary-solid:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* Glass & Cyber Utility Buttons */
 .btn-glass {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-main);
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  padding: 9px 16px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
+  font-family: inherit;
 }
 
 .btn-glass:hover:not(:disabled) {
-  background: var(--glass-hover);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: #00f0ff;
+  color: #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
 }
 
 .btn-glass-sm {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-main);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: 6px;
-  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px));
+  padding: 6px 12px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
+  font-family: inherit;
 }
 
 .btn-glass-sm:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.btn-link-subtle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s ease;
-}
-
-.btn-link-subtle:hover {
-  color: var(--text-dim);
+  background: rgba(0, 240, 255, 0.2);
+  border-color: #00f0ff;
+  color: #00f0ff;
 }
 
 .icon-btn-ghost {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-dim);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   padding: 0;
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .icon-btn-ghost:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.12);
+  border-color: rgba(0, 240, 255, 0.35);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
 }
 
 .icon-btn-ghost-sm {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1261,14 +1769,15 @@ html, body {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
+  transition: color 0.15s ease;
 }
 
 .icon-btn-ghost-sm:hover {
-  color: #ffffff;
+  color: #00f0ff;
 }
 
 /* =========================================================
-   CLEAN MINIMAL MODALS
+   ARCADE MODALS (Chamfered Cockpit Windows & Tactical Panels)
    ========================================================= */
 
 .modal-backdrop {
@@ -1278,9 +1787,9 @@ html, body {
   width: 100vw;
   height: 100vh;
   z-index: 150;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1290,11 +1799,11 @@ html, body {
 .modal-card {
   width: 100%;
   max-width: 680px;
-  background: var(--glass-bg-elevated);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(14, 18, 28, 0.98) 0%, rgba(8, 10, 16, 0.98) 100%);
+  border: 1.5px solid rgba(0, 240, 255, 0.35);
+  clip-path: polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
   padding: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 30px rgba(0, 240, 255, 0.12);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -1304,28 +1813,110 @@ html, body {
   max-width: 440px;
 }
 
+/* Controls Grid Modal */
+.controls-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.controls-group-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #00f0ff;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.controls-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-key-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+.control-key-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: #00f0ff;
+  color: #020814;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  min-width: 58px;
+  text-align: center;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
+}
+
+.control-key-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Credits Body */
+.credits-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.credits-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+.credits-role {
+  color: #00f0ff;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.credits-val {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 18px;
-}
-
-.modal-title-group {
-  display: flex;
-  flex-direction: column;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.modal-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #00f0ff;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
 }
 
 .modal-header-actions {
@@ -1342,22 +1933,24 @@ html, body {
 .minimal-form input,
 .minimal-form select {
   width: 100%;
-  padding: 9px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border-subtle);
-  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
   color: #ffffff;
   font-size: 13px;
   font-family: inherit;
+  font-weight: 600;
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .modal-search-row input:focus,
 .minimal-form input:focus,
 .minimal-form select:focus {
-  border-color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.08);
+  border-color: #00f0ff;
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
 }
 
 .minimal-form select option {
@@ -1692,23 +2285,19 @@ html, body {
 }
 
 /* =========================================================
-   COMBAT HUD (CLEAN TACTICAL)
+   COMBAT HUD (CLEAN TACTICAL - Hidden during gameplay per user specification)
    ========================================================= */
 
-.combat-hud-root {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 60;
-  pointer-events: none;
-  font-family: var(--font-system);
-  display: none;
+.combat-hud-root,
+#combat-hud-root {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .combat-hud-root.visible {
-  display: block;
+  display: none !important;
 }
 
 .hud-top-bar {
@@ -2270,28 +2859,113 @@ html, body {
   .screen-split-layout {
     flex-direction: column;
     justify-content: flex-end;
-    padding: 24px 16px;
+    align-items: center;
+    padding: 68px 16px 20px 16px;
   }
+
+  .mobile-layout-tabs {
+    display: inline-flex;
+  }
+
+  /* When on tab-hangar on mobile: show left panel, hide right panel */
+  .screen-split-layout.tab-hangar .menu-left-panel {
+    display: block;
+    width: 100%;
+    max-width: 440px;
+  }
+
+  .screen-split-layout.tab-hangar .menu-right-panel {
+    display: none !important;
+  }
+
+  /* When on tab-menu on mobile: show right panel, hide left panel */
+  .screen-split-layout.tab-menu .menu-right-panel {
+    display: block;
+    width: 100%;
+    max-width: 440px;
+  }
+
+  .screen-split-layout.tab-menu .menu-left-panel {
+    display: none !important;
+  }
+
   .ship-viewport-space {
     flex: 0.8;
-    min-height: 160px;
+    min-height: 140px;
   }
+
+  .controls-content-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .menu-left-panel,
   .menu-right-panel {
     width: 100%;
     max-width: 440px;
   }
-  .panel-glass-card {
-    padding: 18px;
-    gap: 14px;
+
+  .arcade-card {
+    padding: 16px;
+    gap: 11px;
   }
+
+  .arcade-btn {
+    padding: 11px 14px;
+    font-size: 13px;
+  }
+
   .staging-content-layout {
     grid-template-columns: 1fr;
   }
+
   .hud-vitals-card {
     bottom: 80px;
     width: 170px;
   }
+
   .hud-radar-card {
     bottom: 80px;
+  }
+}
+
+@media (max-height: 520px) {
+  /* Mobile Landscape optimization */
+  .screen-split-layout {
+    padding: 44px 12px 8px 12px;
+  }
+
+  .menu-left-panel,
+  .menu-right-panel {
+    max-height: calc(100vh - 50px);
+  }
+
+  .arcade-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .arcade-btn {
+    padding: 7px 11px;
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .arcade-stepper-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ship-selector-hero {
+    padding: 6px 10px;
+  }
+
+  .ship-hero-info .ship-title-text {
+    font-size: 15px;
+  }
+
+  .ship-specs-container {
+    padding: 8px 10px;
+    gap: 6px;
   }
 }

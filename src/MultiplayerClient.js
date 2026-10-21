@@ -57,6 +57,58 @@ export class MultiplayerClient {
     }
   }
 
+  /**
+   * Connects to backend, pinging health and retrying if server is waking from sleep.
+   * @param {object} [options]
+   * @param {number} [options.maxRetries=15]
+   * @param {number} [options.retryDelayMs=2000]
+   * @param {function} [options.onStatus]
+   * @returns {Promise<boolean>}
+   */
+  async connectWithRetry({ maxRetries = 15, retryDelayMs = 2000, onStatus = null } = {}) {
+    if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return true;
+    }
+
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      attempt++;
+      if (onStatus) {
+        if (attempt === 1) {
+          onStatus('CONNECTING TO MULTIPLAYER BACKEND...');
+        } else {
+          onStatus(`WAKING SERVER INSTANCE (ATTEMPT ${attempt}/${maxRetries})...`);
+        }
+      }
+
+      // Ping health endpoint to wake Render container if sleeping
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        await fetch(`${this.httpUrl}/health`, {
+          signal: controller.signal,
+          headers: { Accept: 'application/json' }
+        }).catch(() => {});
+        clearTimeout(timeoutId);
+      } catch {
+        // ignore
+      }
+
+      try {
+        await this.connect();
+        if (onStatus) onStatus('BACKEND CONNECTED · UPLINK ONLINE');
+        return true;
+      } catch (err) {
+        console.warn(`[MultiplayerClient] Connection attempt ${attempt} failed:`, err);
+        if (attempt < maxRetries) {
+          await new Promise(r => setTimeout(r, retryDelayMs));
+        }
+      }
+    }
+
+    throw new Error('Multiplayer server connection timed out');
+  }
+
   connect() {
     return new Promise((resolve, reject) => {
       if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {

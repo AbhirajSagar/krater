@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { shipLoader } from './ShipLoader.js';
 import { ThrusterFlame, ThrusterSparkSystem } from './ThrusterVFX.js';
 import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
+import { createStarSparrowMaterial, SPARROW_THEMES } from './StarSparrowMaterial.js';
 
 export class RemotePlayer {
   /**
@@ -20,8 +21,17 @@ export class RemotePlayer {
     this.id = playerData.id;
     this.name = playerData.name || 'Unknown Pilot';
     this.customData = playerData.customData || {};
-    this.shipIndex = playerData.customData?.shipIndex ?? 0;
+    this.shipIndex = (typeof playerData.state?.shipIndex === 'number')
+      ? playerData.state.shipIndex
+      : (typeof playerData.customData?.shipIndex === 'number')
+        ? playerData.customData.shipIndex
+        : 0;
+    this.themeKey = playerData.state?.themeKey || playerData.customData?.themeKey || 'Cyan';
     this.config = SPACESHIP_CONFIGS[this.shipIndex] || SPACESHIP_CONFIGS[0];
+    this.currentMaterial = null;
+    this._isLoadingModel = false;
+    this._pendingShipIndex = null;
+    this._pendingThemeKey = null;
 
     // Hierarchy
     this.root = new THREE.Group();
@@ -79,22 +89,100 @@ export class RemotePlayer {
     this.loadShipModel();
   }
 
-  async loadShipModel() {
+  async loadShipModel(themeKey = null) {
+    if (this._isLoadingModel) {
+      this._pendingShipIndex = this.shipIndex;
+      this._pendingThemeKey = themeKey || this.themeKey;
+      return;
+    }
+    this._isLoadingModel = true;
+    const targetTheme = themeKey || this.themeKey || 'Cyan';
+
     try {
       const template = await shipLoader.getShipTemplate(this.shipIndex);
-      if (this.isDestroyed) return;
+      if (this.isDestroyed) {
+        this._isLoadingModel = false;
+        return;
+      }
 
       if (this.modelInstance) {
         this.visualHolder.remove(this.modelInstance);
+        this.modelInstance = null;
       }
 
-      this.modelInstance = template.createInstance();
+      const instance = template.createInstance();
+
+      // Create dedicated StarSparrow material instance so remote player's theme colors work independently
+      const mat = createStarSparrowMaterial(template.config);
+      if (mat && mat.setTheme) {
+        mat.setTheme(targetTheme);
+      }
+      this.currentMaterial = mat;
+
+      instance.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          child.material = mat;
+        }
+      });
+
+      this.modelInstance = instance;
       this.visualHolder.add(this.modelInstance);
 
-      // Setup Thrusters
+      // Setup Thrusters matching this ship model's hardpoints
       this.buildThrusters(template.config.thrusters);
+
+      // Apply theme color to thruster flames & sparks
+      this.applyTheme(targetTheme);
     } catch (err) {
       console.warn(`[RemotePlayer] Failed to load model for ${this.name}:`, err);
+    } finally {
+      this._isLoadingModel = false;
+      if (this._pendingShipIndex !== null) {
+        const nextIdx = this._pendingShipIndex;
+        const nextTheme = this._pendingThemeKey;
+        this._pendingShipIndex = null;
+        this._pendingThemeKey = null;
+        if (nextIdx !== this.shipIndex || (nextTheme && nextTheme !== this.themeKey)) {
+          this.setShip(nextIdx, nextTheme);
+        }
+      }
+    }
+  }
+
+  async setShip(shipIndex, themeKey = null) {
+    if (typeof shipIndex !== 'number' || shipIndex < 0 || shipIndex >= SPACESHIP_CONFIGS.length) {
+      return;
+    }
+    const shipChanged = shipIndex !== this.shipIndex;
+    const themeChanged = Boolean(themeKey && themeKey !== this.themeKey);
+
+    this.shipIndex = shipIndex;
+    this.config = SPACESHIP_CONFIGS[shipIndex] || SPACESHIP_CONFIGS[0];
+    if (themeKey) this.themeKey = themeKey;
+
+    if (shipChanged || !this.modelInstance) {
+      await this.loadShipModel(this.themeKey);
+    } else if (themeChanged) {
+      this.applyTheme(this.themeKey);
+    }
+  }
+
+  applyTheme(themeKey) {
+    if (!themeKey) return;
+    this.themeKey = themeKey;
+    if (this.currentMaterial && this.currentMaterial.setTheme) {
+      this.currentMaterial.setTheme(themeKey);
+    }
+    const theme = SPARROW_THEMES[themeKey];
+    if (theme) {
+      for (const thruster of this.activeThrusters) {
+        thruster.setColor(theme.flameColor);
+      }
+      if (this.sparkSystem) {
+        this.sparkSystem.setColor(theme.flameColor);
+      }
     }
   }
 
@@ -246,6 +334,11 @@ export class RemotePlayer {
     if (this.isDestroyed) return;
     this.lastPacketTime = performance.now();
 
+    // Dynamically sync ship model and theme from peer transform packets
+    if (packet.shipIndex !== undefined && (packet.shipIndex !== this.shipIndex || (packet.themeKey && packet.themeKey !== this.themeKey))) {
+      this.setShip(packet.shipIndex, packet.themeKey);
+    }
+
     if (packet.pos) {
       this.targetPosition.set(packet.pos[0], packet.pos[1], packet.pos[2]);
     }
@@ -302,6 +395,12 @@ export class RemotePlayer {
     // Update thruster VFX
     const forwardRatio = Math.max(0, Math.min(1, this.currentSpeed / 45.0));
     const targetThrottle = this.isBoosting ? 1.0 : Math.max(0.18, forwardRatio);
+
+    // Update dynamic shader flight effects (boost glow)
+    if (this.currentMaterial && this.currentMaterial.updateFlightVFX) {
+      const throttleVal = Math.min(1.0, Math.abs(this.currentSpeed) / 55.0);
+      this.currentMaterial.updateFlightVFX(dt, this.isBoosting, throttleVal);
+    }
 
     const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
     const shipDir = new THREE.Vector3(0, 0, -1).applyQuaternion(shipWorldQuat);

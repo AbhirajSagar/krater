@@ -48,6 +48,20 @@ export class RemotePlayerManager {
     if (playerData.name && player.name !== playerData.name) {
       player.name = playerData.name;
     }
+
+    const shipIdx = (typeof playerData.state?.shipIndex === 'number')
+      ? playerData.state.shipIndex
+      : (typeof playerData.customData?.shipIndex === 'number')
+        ? playerData.customData.shipIndex
+        : undefined;
+    const themeKey = playerData.state?.themeKey || playerData.customData?.themeKey;
+
+    if (shipIdx !== undefined) {
+      player.setShip(shipIdx, themeKey);
+    } else if (themeKey) {
+      player.applyTheme(themeKey);
+    }
+
     if (playerData.state) {
       if (playerData.state.health !== undefined || playerData.state.shield !== undefined) {
         player.setVitals(playerData.state.health, playerData.state.shield);

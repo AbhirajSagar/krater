@@ -9,8 +9,10 @@ export class OptionsMenu {
    */
   constructor(options = {}) {
     this.spaceship = options.spaceship || null;
+    this.onLeaveMatch = options.onLeaveMatch || null;
     this.isOpen = false;
     this.canControl = false;
+    this.inBattle = false;
 
     this.initDOM();
     this.setupListeners();
@@ -19,6 +21,17 @@ export class OptionsMenu {
 
   setSpaceship(spaceship) {
     this.spaceship = spaceship;
+  }
+
+  setInBattle(inBattle) {
+    this.inBattle = !!inBattle;
+    if (this.leaveRow) {
+      if (this.inBattle) {
+        this.leaveRow.classList.remove('hidden');
+      } else {
+        this.leaveRow.classList.add('hidden');
+      }
+    }
   }
 
   showToggleButton() {
@@ -82,6 +95,21 @@ export class OptionsMenu {
                 <span id="label-fullscreen">Fullscreen</span>
               </button>
             </div>
+
+            <!-- Return to Menu Row (when in battle) -->
+            <div id="option-row-leave" class="option-row hidden">
+              <div class="option-info">
+                <span class="option-label">Match Session</span>
+              </div>
+              <button id="btn-leave-match" class="glass-btn-sm btn-leave-arena" aria-label="Exit to Main Menu">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Exit to Menu</span>
+              </button>
+            </div>
           </div>
         </div>
       `;
@@ -94,6 +122,8 @@ export class OptionsMenu {
     this.iconEnterFullscreen = document.getElementById('icon-enter-fullscreen');
     this.iconExitFullscreen = document.getElementById('icon-exit-fullscreen');
     this.labelFullscreen = document.getElementById('label-fullscreen');
+    this.leaveBtn = document.getElementById('btn-leave-match');
+    this.leaveRow = document.getElementById('option-row-leave');
   }
 
   setupListeners() {
@@ -105,6 +135,14 @@ export class OptionsMenu {
     this.closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.close();
+    });
+
+    this.leaveBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.close();
+      if (this.onLeaveMatch) {
+        this.onLeaveMatch();
+      }
     });
 
     // Close when clicking outside the dialog card

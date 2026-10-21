@@ -44,6 +44,7 @@ export class SkyboxManager {
 
     this.currentSkybox = null;
     this.currentIndex = -1;
+    this._fallbackIndex = -1;
     this.cache = new Map();
     this.listeners = [];
 
@@ -66,33 +67,82 @@ export class SkyboxManager {
   }
 
   /**
-   * Pick and load a random skybox
+   * Retrieves the stored sequential skybox index from localStorage with in-memory fallback
+   * @returns {number}
+   */
+  getStoredIndex() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const val = localStorage.getItem('spacegame_skybox_index');
+        if (val !== null) {
+          const parsed = parseInt(val, 10);
+          if (!isNaN(parsed) && parsed >= 0) {
+            return parsed;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return this._fallbackIndex;
+  }
+
+  /**
+   * Saves the current sequential skybox index to localStorage with in-memory fallback
+   * @param {number} index
+   */
+  setStoredIndex(index) {
+    this._fallbackIndex = index;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_skybox_index', String(index));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Returns the next sequential skybox ID without advancing the index yet
+   * @returns {string}
+   */
+  getNextSequentialSkyboxId() {
+    const listLen = this.skyboxes.length || 4;
+    const stored = this.getStoredIndex();
+    const nextIdx = (stored + 1) % listLen;
+    return this.skyboxes[nextIdx]?.id || 'blue_nebula';
+  }
+
+  /**
+   * Load the next sequential skybox so each skybox gets its chance in order
    * @param {Function} [onProgress]
    */
-  async loadRandomSkybox(onProgress = null) {
+  async loadNextSequentialSkybox(onProgress = null) {
     if (this.manifestPromise) {
       await this.manifestPromise;
     }
     if (this.skyboxes.length === 0) return Promise.reject(new Error('No skyboxes defined'));
 
-    let newIndex;
-    if (this.skyboxes.length === 1) {
-      newIndex = 0;
-    } else {
-      do {
-        newIndex = Math.floor(Math.random() * this.skyboxes.length);
-      } while (newIndex === this.currentIndex);
-    }
+    const stored = this.getStoredIndex();
+    const nextIndex = (stored + 1) % this.skyboxes.length;
+    this.setStoredIndex(nextIndex);
 
-    return this.loadByIndex(newIndex, onProgress);
+    return this.loadByIndex(nextIndex, onProgress);
   }
 
   /**
-   * Cycle to next skybox
+   * Sequential environment loader replacing legacy random selector
+   * @param {Function} [onProgress]
+   */
+  async loadRandomSkybox(onProgress = null) {
+    return this.loadNextSequentialSkybox(onProgress);
+  }
+
+  /**
+   * Cycle to next skybox sequentially
    */
   nextSkybox() {
-    const nextIdx = (this.currentIndex + 1) % this.skyboxes.length;
-    return this.loadByIndex(nextIdx);
+    return this.loadNextSequentialSkybox();
   }
 
   /**
@@ -103,7 +153,20 @@ export class SkyboxManager {
   loadById(id, onProgress = null) {
     const idx = this.skyboxes.findIndex(s => s.id === id);
     if (idx === -1) return Promise.reject(new Error(`Skybox ${id} not found`));
+    this.setStoredIndex(idx);
     return this.loadByIndex(idx, onProgress);
+  }
+
+  /**
+   * General skybox loader alias for convenience
+   * @param {string|number} idOrIndex
+   * @param {Function} [onProgress]
+   */
+  loadSkybox(idOrIndex, onProgress = null) {
+    if (typeof idOrIndex === 'number') {
+      return this.loadByIndex(idOrIndex, onProgress);
+    }
+    return this.loadById(idOrIndex, onProgress);
   }
 
   /**
@@ -114,6 +177,15 @@ export class SkyboxManager {
   loadByIndex(index, onProgress = null) {
     const skybox = this.skyboxes[index];
     if (!skybox) return Promise.reject(new Error(`Invalid skybox index ${index}`));
+
+    // If this skybox is already actively applied to the scene, return immediately
+    if (this.currentSkybox && this.currentSkybox.id === skybox.id && this.scene.background) {
+      this.currentIndex = index;
+      if (onProgress) {
+        onProgress({ loaded: 6, total: 6, face: 'active', skybox });
+      }
+      return Promise.resolve(skybox);
+    }
 
     this.currentIndex = index;
     this.currentSkybox = skybox;

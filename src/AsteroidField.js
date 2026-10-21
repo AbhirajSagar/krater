@@ -1,6 +1,23 @@
 import * as THREE from 'three';
 import { sounds } from './SoundManager.js';
 
+// Fast, high-quality 32-bit deterministic PRNG (Mulberry32 with FNV-1a string hashing)
+function createPRNG(seedInput) {
+  let s = 2166136261;
+  const str = String(seedInput || 'spacegame_default_sector');
+  for (let i = 0; i < str.length; i++) {
+    s ^= str.charCodeAt(i);
+    s = Math.imul(s, 16777619);
+  }
+  s = s >>> 0;
+  return function() {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 // Reusable static calculation vectors to eliminate garbage collection in collision loops
 const _seg = new THREE.Vector3();
 const _v = new THREE.Vector3();
@@ -9,14 +26,17 @@ const _closest = new THREE.Vector3();
 export class AsteroidField {
   /**
    * High-performance, zero-allocation asteroid field with pre-pooled debris & shockwaves
+   * Fully synchronized across multiplayer via deterministic seed-based layout
    * @param {THREE.Scene} scene
    * @param {number} count
+   * @param {string|number} [seed='spacegame_default_sector']
    */
-  constructor(scene, count = 450) {
+  constructor(scene, count = 450, seed = 'spacegame_default_sector') {
     this.scene = scene;
     this.count = count;
     this.asteroids = [];
     this.group = new THREE.Group();
+    this.seed = seed;
 
     // 1. Pre-create 3 main asteroid geometry variants with computed bounding spheres
     this.geometries = [
@@ -56,75 +76,104 @@ export class AsteroidField {
     this.setupFragmentPool(48);
 
     this.onAsteroidDestroyed = null;
+    this.onAsteroidDamaged = null;
 
-    // 7. Populate initial asteroids
-    const spawnRadiusMin = 40;
-    const spawnRadiusMax = 450;
-    const baseRadii = [1.0, 1.4, 2.2];
-
+    // 7. Instantiate asteroid mesh pool
     for (let i = 0; i < count; i++) {
       const geomIdx = i % this.geometries.length;
       const geom = this.geometries[geomIdx];
-      const baseRadius = baseRadii[geomIdx];
       const mat = this.rockMaterials[i % this.rockMaterials.length];
-
       const mesh = new THREE.Mesh(geom, mat);
-
-      const angle = Math.random() * Math.PI * 2;
-      const dist = spawnRadiusMin + Math.random() * (spawnRadiusMax - spawnRadiusMin);
-      const height = (Math.random() - 0.5) * 120;
-
-      mesh.position.set(
-        Math.cos(angle) * dist,
-        height,
-        Math.sin(angle) * dist
-      );
-
-      const scale = 1.5 + Math.random() * 6.5;
-      const sx = scale * (0.8 + Math.random() * 0.4);
-      const sy = scale * (0.8 + Math.random() * 0.4);
-      const sz = scale * (0.8 + Math.random() * 0.4);
-      mesh.scale.set(sx, sy, sz);
-
-      mesh.rotation.set(
-        Math.random() * Math.PI * 2,
-        Math.random() * Math.PI * 2,
-        Math.random() * Math.PI * 2
-      );
-
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-
-      const rotSpeed = new THREE.Vector3(
-        (Math.random() - 0.5) * 0.3,
-        (Math.random() - 0.5) * 0.3,
-        (Math.random() - 0.5) * 0.3
-      );
-
-      const maxScale = Math.max(sx, sy, sz);
-      const avgScale = (sx + sy + sz) / 3;
-      const effectiveRadius = baseRadius * avgScale;
-      const boundingRadius = baseRadius * maxScale * 1.15;
-
-      // Required laser hits directly proportional to the size of the asteroid
-      const maxHealth = Math.max(1, Math.round(effectiveRadius * 0.75));
-
       this.group.add(mesh);
 
       this.asteroids.push({
         mesh,
-        rotSpeed,
-        effectiveRadius,
-        boundingRadius,
-        boundingRadiusSq: boundingRadius * boundingRadius,
-        maxHealth,
-        health: maxHealth,
+        rotSpeed: new THREE.Vector3(),
+        effectiveRadius: 1.0,
+        boundingRadius: 1.0,
+        boundingRadiusSq: 1.0,
+        maxHealth: 1,
+        health: 1,
         isDestroyed: false
       });
     }
 
     this.scene.add(this.group);
     this._cachedMeshes = [];
+    this._meshesNeedUpdate = true;
+
+    // 8. Populate deterministically using initial seed
+    this.reseed(seed);
+  }
+
+  /**
+   * Deterministically regenerates/aligns all asteroid positions, sizes, and orientations
+   * ensuring 100% spatial and visual synchronization across all multiplayer clients
+   * @param {string|number} seedInput Room code or unique seed
+   */
+  reseed(seedInput = 'spacegame_default_sector') {
+    this.seed = seedInput;
+    const rnd = createPRNG(seedInput);
+    const spawnRadiusMin = 40;
+    const spawnRadiusMax = 450;
+    const baseRadii = [1.0, 1.4, 2.2];
+
+    for (let i = 0; i < this.count; i++) {
+      const a = this.asteroids[i];
+      if (!a) continue;
+
+      const angle = rnd() * Math.PI * 2;
+      const dist = spawnRadiusMin + rnd() * (spawnRadiusMax - spawnRadiusMin);
+      const height = (rnd() - 0.5) * 120;
+
+      a.mesh.position.set(
+        Math.cos(angle) * dist,
+        height,
+        Math.sin(angle) * dist
+      );
+
+      const scale = 1.5 + rnd() * 6.5;
+      const sx = scale * (0.8 + rnd() * 0.4);
+      const sy = scale * (0.8 + rnd() * 0.4);
+      const sz = scale * (0.8 + rnd() * 0.4);
+      a.mesh.scale.set(sx, sy, sz);
+
+      a.mesh.rotation.set(
+        rnd() * Math.PI * 2,
+        rnd() * Math.PI * 2,
+        rnd() * Math.PI * 2
+      );
+
+      a.rotSpeed.set(
+        (rnd() - 0.5) * 0.3,
+        (rnd() - 0.5) * 0.3,
+        (rnd() - 0.5) * 0.3
+      );
+
+      const geomIdx = i % this.geometries.length;
+      const baseRadius = baseRadii[geomIdx];
+      const maxScale = Math.max(sx, sy, sz);
+      const avgScale = (sx + sy + sz) / 3;
+      a.effectiveRadius = baseRadius * avgScale;
+      a.boundingRadius = baseRadius * maxScale * 1.15;
+      a.boundingRadiusSq = a.boundingRadius * a.boundingRadius;
+
+      a.maxHealth = Math.max(1, Math.round(a.effectiveRadius * 0.75));
+      a.health = a.maxHealth;
+      a.isDestroyed = false;
+      a.mesh.visible = true;
+    }
+
+    // Reset fragment pool
+    if (this.fragmentPool) {
+      for (const frag of this.fragmentPool) {
+        frag.active = false;
+        frag.mesh.visible = false;
+      }
+    }
+
     this._meshesNeedUpdate = true;
   }
 
@@ -493,6 +542,10 @@ export class AsteroidField {
     a.health -= 1;
     this.spawnImpactSparks(hitPoint, laserColorHex);
 
+    if (this.onAsteroidDamaged && index >= 0) {
+      this.onAsteroidDamaged(index, a.health, a.maxHealth, hitPoint.toArray(), laserColorHex);
+    }
+
     if (a.health <= 0) {
       this.explodeAsteroid(a);
       if (this.onAsteroidDestroyed && index >= 0) {
@@ -508,6 +561,44 @@ export class AsteroidField {
     this.spawnExplosionSparks(frag.mesh.position, frag.effectiveRadius);
     sounds.playHit();
     this._meshesNeedUpdate = true;
+  }
+
+  damageAsteroidByIndex(index, health, hitPointArr = null, laserColorHex = '#ff2244') {
+    if (!this.asteroids || !this.asteroids[index]) return;
+    const a = this.asteroids[index];
+    if (a.isDestroyed) return;
+    if (typeof health === 'number') {
+      a.health = health;
+    } else {
+      a.health -= 1;
+    }
+    if (hitPointArr) {
+      this.spawnImpactSparks(new THREE.Vector3().fromArray(hitPointArr), laserColorHex);
+    }
+    if (a.health <= 0) {
+      this.explodeAsteroid(a);
+    }
+  }
+
+  destroySilent(index) {
+    if (this.asteroids && this.asteroids[index]) {
+      const a = this.asteroids[index];
+      if (!a.isDestroyed) {
+        a.isDestroyed = true;
+        a.mesh.visible = false;
+        this._meshesNeedUpdate = true;
+      }
+    }
+  }
+
+  getDestroyedIndices() {
+    const list = [];
+    for (let i = 0; i < this.asteroids.length; i++) {
+      if (this.asteroids[i].isDestroyed) {
+        list.push(i);
+      }
+    }
+    return list;
   }
 
   explodeAsteroidByIndex(index) {
