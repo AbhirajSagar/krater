@@ -116,11 +116,12 @@ let touchControls = null;
 let minimalAmmoHUD = null;
 let ammoCurrentVal = null;
 let ammoTotalVal = null;
+let ammoBarFill = null;
 
 function updateAmmoUI(current, max) {
   if (!minimalAmmoHUD) return;
 
-  const isLow = current <= 10 && current > 0;
+  const isLow = current <= 15 && current > 0;
   const isEmpty = current <= 0;
 
   if (ammoCurrentVal) {
@@ -130,6 +131,13 @@ function updateAmmoUI(current, max) {
   if (ammoTotalVal) {
     ammoTotalVal.textContent = max;
   }
+  if (!ammoBarFill) {
+    ammoBarFill = document.getElementById('ammo-bar-fill');
+  }
+  if (ammoBarFill) {
+    const pct = Math.max(0, Math.min(100, (current / max) * 100));
+    ammoBarFill.style.width = `${pct}%`;
+  }
 
   minimalAmmoHUD.classList.toggle('low', isLow);
   minimalAmmoHUD.classList.toggle('empty', isEmpty);
@@ -138,6 +146,100 @@ function updateAmmoUI(current, max) {
 // Strict initial touch/mobile capability check
 if (isTouchOrMobileDevice() && typeof document !== 'undefined' && document.body) {
   document.body.classList.add('touch-device');
+}
+
+export function isSmallMobileTouchDevice() {
+  const isTouch = isTouchOrMobileDevice() || (typeof document !== 'undefined' && document.body && document.body.classList.contains('touch-device'));
+  const minDim = Math.min(window.innerWidth, window.innerHeight);
+  const maxDim = Math.max(window.innerWidth, window.innerHeight);
+  return isTouch && (minDim <= 650 || maxDim <= 1024);
+}
+
+export async function forceLandscapeAutoRotate() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+      return true;
+    } else if (screen.lockOrientation) {
+      return screen.lockOrientation('landscape');
+    } else if (screen.mozLockOrientation) {
+      return screen.mozLockOrientation('landscape');
+    } else if (screen.msLockOrientation) {
+      return screen.msLockOrientation('landscape');
+    }
+  } catch (err) {
+    // Requires user gesture or fullscreen on some platforms
+  }
+  return false;
+}
+
+export async function requestFullscreenAndLockLandscape() {
+  try {
+    const docEl = document.documentElement;
+    if (docEl.requestFullscreen) {
+      await docEl.requestFullscreen();
+    } else if (docEl.webkitRequestFullscreen) {
+      await docEl.webkitRequestFullscreen();
+    } else if (docEl.msRequestFullscreen) {
+      await docEl.msRequestFullscreen();
+    }
+  } catch (e) {}
+
+  await forceLandscapeAutoRotate();
+}
+
+// Attempt auto-rotate immediately right from the menu screen load
+if (isSmallMobileTouchDevice()) {
+  forceLandscapeAutoRotate().catch(() => {});
+}
+
+// Also trigger auto-rotate on the very first touch/interaction anywhere on the screen
+const onFirstTouchAutoRotate = () => {
+  if (isSmallMobileTouchDevice()) {
+    forceLandscapeAutoRotate().catch(() => {});
+  }
+};
+window.addEventListener('touchstart', onFirstTouchAutoRotate, { passive: true });
+window.addEventListener('pointerdown', onFirstTouchAutoRotate, { passive: true });
+
+// Mobile landscape aspect ratio and viewport coordinator
+function updateViewportAndAspectRatio() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const isPortrait = h > w;
+  const isSmallMobile = isSmallMobileTouchDevice();
+
+  if (document.body) {
+    if (isSmallMobile) {
+      document.body.classList.add('mobile-touch-device');
+    }
+    document.body.classList.toggle('is-portrait', isPortrait && isSmallMobile);
+    document.body.classList.toggle('is-landscape', !isPortrait || !isSmallMobile);
+  }
+
+  const guard = document.getElementById('orientation-guard');
+  if (guard) {
+    if (isSmallMobile && isPortrait && !guard.dataset.dismissed) {
+      guard.classList.remove('hidden');
+      guard.style.display = 'flex';
+    } else {
+      guard.classList.add('hidden');
+      guard.style.display = 'none';
+    }
+  }
+
+  // Force landscape aspect ratio on smaller mobile devices
+  let aspect = w / h;
+  if (isSmallMobile && aspect < 1.0) {
+    aspect = Math.max(aspect, 16 / 9);
+  }
+
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  updateMenuLayout();
 }
 
 // Game State Switching Functions & Floating Menu Layout
@@ -743,6 +845,7 @@ async function initPipeline() {
   minimalAmmoHUD = document.getElementById('minimal-ammo-hud');
   ammoCurrentVal = document.getElementById('ammo-current-val');
   ammoTotalVal = document.getElementById('ammo-total-val');
+  ammoBarFill = document.getElementById('ammo-bar-fill');
 
   if (spaceship) {
     spaceship.onAmmoChanged = (current, max) => {
@@ -852,6 +955,31 @@ async function initPipeline() {
   if (joinParam && lobbyUI) {
     lobbyUI.handleJoinRoom(joinParam.trim().toUpperCase());
   }
+  // Orientation Guard Controls
+  const btnForceLandscape = document.getElementById('btn-force-landscape');
+  if (btnForceLandscape) {
+    const handleForce = async (e) => {
+      e.preventDefault();
+      await requestFullscreenAndLockLandscape();
+      updateViewportAndAspectRatio();
+    };
+    btnForceLandscape.addEventListener('click', handleForce);
+    btnForceLandscape.addEventListener('touchend', handleForce);
+  }
+
+  const btnDismiss = document.getElementById('btn-dismiss-orientation');
+  if (btnDismiss) {
+    btnDismiss.addEventListener('click', () => {
+      const guard = document.getElementById('orientation-guard');
+      if (guard) {
+        guard.dataset.dismissed = 'true';
+        guard.classList.add('hidden');
+        guard.style.display = 'none';
+      }
+    });
+  }
+
+  updateViewportAndAspectRatio();
 }
 
 // 9. Launch Pipeline with Resilient Fallback
@@ -864,11 +992,12 @@ initPipeline().catch((err) => {
   enterMainMenu();
 });
 
-// Responsive window resize
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  updateMenuLayout();
+// Responsive window resize & mobile orientation change handling
+window.addEventListener('resize', updateViewportAndAspectRatio);
+window.addEventListener('orientationchange', () => {
+  setTimeout(updateViewportAndAspectRatio, 100);
+  setTimeout(updateViewportAndAspectRatio, 300);
 });
+if (screen.orientation) {
+  screen.orientation.addEventListener('change', updateViewportAndAspectRatio);
+}

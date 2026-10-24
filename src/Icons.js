@@ -208,5 +208,11 @@ export const Icons = {
       <line x1="12" y1="6" x2="12" y2="2"></line>
       <line x1="12" y1="22" x2="12" y2="18"></line>
     </svg>
+  `,
+
+  ammo: (size = 16) => `
+    <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M4 4c0-1.1.9-2 2-2s2 .9 2 2v8H4V4zm0 10h4v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7z"/>
+    </svg>
   `
 };

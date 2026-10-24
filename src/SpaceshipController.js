@@ -138,9 +138,12 @@ export class SpaceshipController {
     this.shieldRegenTimer = 0.0;
     this.shieldRegenRate = 22.0;
 
-    // Weapon Ammo System
+    // Weapon Ammo System & Capacitor Recharge
     this.maxAmmo = 60;
     this.currentAmmo = 60;
+    this.ammoRechargeDelay = 1.1;
+    this.ammoRechargeRate = 32.0;
+    this._ammoAccumulator = 0.0;
     this.onAmmoChanged = null;
 
     // Multiplayer Combat Hooks
@@ -529,6 +532,22 @@ export class SpaceshipController {
       this.shieldRegenTimer += dt;
       if (this.shieldRegenTimer >= this.shieldRegenDelay) {
         this.shield = Math.min(this.maxShield, this.shield + this.shieldRegenRate * dt);
+      }
+    }
+
+    // Weapon Ammo Capacitor Automatic Recharge
+    if (this.enabled && !this.isDestroyed && this.currentAmmo < this.maxAmmo) {
+      const timeSinceFire = (performance.now() - (this.lastFireTime || 0)) / 1000;
+      if (timeSinceFire >= this.ammoRechargeDelay) {
+        this._ammoAccumulator += this.ammoRechargeRate * dt;
+        if (this._ammoAccumulator >= 1.0) {
+          const add = Math.floor(this._ammoAccumulator);
+          this._ammoAccumulator -= add;
+          this.currentAmmo = Math.min(this.maxAmmo, this.currentAmmo + add);
+          if (this.onAmmoChanged) {
+            this.onAmmoChanged(this.currentAmmo, this.maxAmmo);
+          }
+        }
       }
     }
 
@@ -935,6 +954,7 @@ export class SpaceshipController {
     if (!this.lastFireTime || (now - this.lastFireTime) > 130) {
       this.lastFireTime = now;
       this.currentAmmo = Math.max(0, this.currentAmmo - 1);
+      this._ammoAccumulator = 0.0;
 
       this.testFireWeapons(customShootingPoints);
 
