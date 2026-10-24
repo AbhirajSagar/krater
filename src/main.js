@@ -248,12 +248,18 @@ function updateMenuLayout() {
   const isCompact = window.innerWidth <= 1024 || window.innerHeight <= 540;
   if (isCompact) {
     // In compact landscape, position ship cleanly in the center gap between left and right panels
-    if (spaceship) spaceship.root.position.set(-0.15, -0.05, 0);
-    baseCamPos.set(0, 0.65, 5.4);
-    baseCamLook.set(0, 0.15, 0);
+    if (spaceship) {
+      spaceship.root.position.set(0, 0.05, 0);
+      spaceship.root.rotation.set(0.08, 0.45, 0);
+    }
+    baseCamPos.set(0, 0.65, 6.8);
+    baseCamLook.set(0, 0.1, 0);
   } else {
     // Standard laptop/desktop layout: ship is centered in viewport between left hangar and right menu panels
-    if (spaceship) spaceship.root.position.set(-0.75, -0.15, 0);
+    if (spaceship) {
+      spaceship.root.position.set(-0.75, -0.15, 0);
+      spaceship.root.rotation.set(0.08, 0.45, 0);
+    }
     baseCamPos.set(0, 0.8, 5.8);
     baseCamLook.set(0, 0.2, 0);
   }

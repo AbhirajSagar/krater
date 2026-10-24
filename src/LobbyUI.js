@@ -1211,8 +1211,14 @@ export class LobbyUI {
 
   enterStagingLobby(room) {
     this.currentScreen = 'lobby';
-    this.screenMain?.classList.add('hidden');
-    this.screenStaging?.classList.remove('hidden');
+    if (this.screenMain) {
+      this.screenMain.classList.add('hidden');
+      this.screenMain.style.display = 'none';
+    }
+    if (this.screenStaging) {
+      this.screenStaging.classList.remove('hidden');
+      this.screenStaging.style.display = 'flex';
+    }
 
     this.isHost = room.hostId === this.client.playerId;
     this.isReady = false;
@@ -1321,8 +1327,14 @@ export class LobbyUI {
 
   returnToMainMenu() {
     this.currentScreen = 'main';
-    this.screenStaging?.classList.add('hidden');
-    this.screenMain?.classList.remove('hidden');
+    if (this.screenStaging) {
+      this.screenStaging.classList.add('hidden');
+      this.screenStaging.style.display = 'none';
+    }
+    if (this.screenMain) {
+      this.screenMain.classList.remove('hidden');
+      this.screenMain.style.display = 'flex';
+    }
     this.navOptionsMain?.classList.remove('hidden');
     this.navOptionsMultiplayer?.classList.add('hidden');
     this.root.classList.add('visible');
@@ -1333,16 +1345,36 @@ export class LobbyUI {
 
   hideAll() {
     this.root.classList.remove('visible');
-    this.screenMain?.classList.add('hidden');
-    this.screenStaging?.classList.add('hidden');
+    if (this.screenMain) {
+      this.screenMain.classList.add('hidden');
+      this.screenMain.style.display = 'none';
+    }
+    if (this.screenStaging) {
+      this.screenStaging.classList.add('hidden');
+      this.screenStaging.style.display = 'none';
+    }
   }
 
   showMenu() {
     this.root.classList.add('visible');
     if (this.currentScreen === 'lobby') {
-      this.screenStaging?.classList.remove('hidden');
+      if (this.screenMain) {
+        this.screenMain.classList.add('hidden');
+        this.screenMain.style.display = 'none';
+      }
+      if (this.screenStaging) {
+        this.screenStaging.classList.remove('hidden');
+        this.screenStaging.style.display = 'flex';
+      }
     } else {
-      this.screenMain?.classList.remove('hidden');
+      if (this.screenStaging) {
+        this.screenStaging.classList.add('hidden');
+        this.screenStaging.style.display = 'none';
+      }
+      if (this.screenMain) {
+        this.screenMain.classList.remove('hidden');
+        this.screenMain.style.display = 'flex';
+      }
     }
   }
 }
