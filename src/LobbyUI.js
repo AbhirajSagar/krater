@@ -55,7 +55,6 @@ export class LobbyUI {
     this.selectedThemeKey = localStorage.getItem('spacegame_theme_key') || 'Cyan';
 
     this.currentScreen = 'main'; // 'main', 'lobby'
-    this.activeMobileTab = 'menu'; // 'hangar' or 'menu' on smaller screens
     this.isHost = false;
     this.isReady = false;
     this.isLoading = false;
@@ -90,19 +89,7 @@ export class LobbyUI {
 
     this.root.innerHTML = `
       <!-- ================= MAIN MENU SCREEN (Ship Selector on Left, Menu Options on Right) ================= -->
-      <div class="lobby-screen screen-main screen-split-layout tab-${this.activeMobileTab}" id="screen-main">
-        
-        <!-- Mobile Segmented Tab Switcher (Visible on <= 900px screens) -->
-        <div class="mobile-layout-tabs" id="mobile-layout-tabs">
-          <button class="mobile-tab-btn ${this.activeMobileTab === 'hangar' ? 'active' : ''}" id="btn-tab-hangar" type="button">
-            ${Icons.rocket(15)}
-            <span>HANGAR</span>
-          </button>
-          <button class="mobile-tab-btn ${this.activeMobileTab === 'menu' ? 'active' : ''}" id="btn-tab-menu" type="button">
-            ${Icons.compass(15)}
-            <span>MENU</span>
-          </button>
-        </div>
+      <div class="lobby-screen screen-main screen-split-layout" id="screen-main">
 
         <!-- ================= LEFT SIDE: SHIP SELECTOR ================= -->
         <aside class="menu-left-panel" id="panel-hangar">
@@ -565,10 +552,6 @@ export class LobbyUI {
     this.panelHangar = document.getElementById('panel-hangar');
     this.panelMenu = document.getElementById('panel-menu');
 
-    // Mobile tabs
-    this.btnTabHangar = document.getElementById('btn-tab-hangar');
-    this.btnTabMenu = document.getElementById('btn-tab-menu');
-
     // Left Panel Hangar elements
     this.shipCounterEl = document.getElementById('ship-counter-badge');
     this.shipNameEl = document.getElementById('ship-name-val');
@@ -662,17 +645,6 @@ export class LobbyUI {
   }
 
   setupListeners() {
-    // Mobile Tab Switcher
-    this.btnTabHangar?.addEventListener('click', () => {
-      sounds.playClick();
-      this.setActiveMobileTab('hangar');
-    });
-
-    this.btnTabMenu?.addEventListener('click', () => {
-      sounds.playClick();
-      this.setActiveMobileTab('menu');
-    });
-
     // Callsign input
     this.inputCallsign?.addEventListener('input', (e) => {
       this.callsign = e.target.value.trim() || 'Pilot';
@@ -893,19 +865,7 @@ export class LobbyUI {
     });
   }
 
-  setActiveMobileTab(tab) {
-    this.activeMobileTab = tab;
-    if (this.screenMain) {
-      this.screenMain.classList.remove('tab-hangar', 'tab-menu');
-      this.screenMain.classList.add(`tab-${tab}`);
-    }
-    if (this.btnTabHangar) {
-      this.btnTabHangar.classList.toggle('active', tab === 'hangar');
-    }
-    if (this.btnTabMenu) {
-      this.btnTabMenu.classList.toggle('active', tab === 'menu');
-    }
-  }
+  setActiveMobileTab() {}
 
   updateShipDisplay() {
     const config = SPACESHIP_CONFIGS[this.selectedShipIndex] || SPACESHIP_CONFIGS[0];

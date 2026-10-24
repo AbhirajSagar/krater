@@ -1174,62 +1174,26 @@ body.touch-device #touch-controls.visible {
 
 /* =========================================================
    SPLIT SCREEN MENU (Ship Selector on Left, Menu on Right)
+   Fixed Laptop / Desktop Menu Layout (Non-Responsive)
    ========================================================= */
 
 .screen-split-layout {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
   padding: 36px 54px;
   background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.08) 0%, rgba(3, 4, 8, 0.85) 100%);
   pointer-events: none;
   overflow: hidden;
   position: relative;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
 }
 
-/* Mobile Segmented Tab Switcher (Visible on <= 900px screens) */
 .mobile-layout-tabs {
-  display: none;
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  background: rgba(12, 14, 20, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
-  border-radius: 9999px;
-  padding: 4px;
-  gap: 4px;
-  pointer-events: auto;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
-}
-
-.mobile-tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border-radius: 9999px;
-  background: transparent;
-  border: none;
-  color: var(--text-dim);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  outline: none;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  white-space: nowrap;
-}
-
-.mobile-tab-btn.active {
-  background: #ffffff;
-  color: #000000;
-  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.3);
+  display: none !important;
 }
 
 /* =========================================================
@@ -1238,7 +1202,7 @@ body.touch-device #touch-controls.visible {
 
 .menu-left-panel {
   width: 360px;
-  max-width: 100%;
+  max-width: 360px;
   max-height: calc(100vh - 64px);
   overflow-y: auto;
   pointer-events: auto;
@@ -1246,6 +1210,8 @@ body.touch-device #touch-controls.visible {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   animation: panelSlideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block !important;
+  flex-shrink: 0;
 }
 
 @keyframes panelSlideLeft {
@@ -1518,7 +1484,7 @@ body.touch-device #touch-controls.visible {
 
 .menu-right-panel {
   width: 370px;
-  max-width: 100%;
+  max-width: 370px;
   max-height: calc(100vh - 64px);
   overflow-y: auto;
   pointer-events: auto;
@@ -1526,6 +1492,8 @@ body.touch-device #touch-controls.visible {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   animation: panelSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  display: block !important;
+  flex-shrink: 0;
 }
 
 @keyframes panelSlideIn {
@@ -3116,63 +3084,9 @@ body.touch-device #touch-controls.visible {
 }
 
 @media (max-width: 900px) {
-  .screen-split-layout {
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    padding: 68px 16px 20px 16px;
-  }
-
-  .mobile-layout-tabs {
-    display: inline-flex;
-  }
-
-  /* When on tab-hangar on mobile: show left panel, hide right panel */
-  .screen-split-layout.tab-hangar .menu-left-panel {
-    display: block;
-    width: 100%;
-    max-width: 440px;
-  }
-
-  .screen-split-layout.tab-hangar .menu-right-panel {
-    display: none !important;
-  }
-
-  /* When on tab-menu on mobile: show right panel, hide left panel */
-  .screen-split-layout.tab-menu .menu-right-panel {
-    display: block;
-    width: 100%;
-    max-width: 440px;
-  }
-
-  .screen-split-layout.tab-menu .menu-left-panel {
-    display: none !important;
-  }
-
-  .ship-viewport-space {
-    flex: 0.8;
-    min-height: 140px;
-  }
-
   .controls-content-grid {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-
-  .menu-left-panel,
-  .menu-right-panel {
-    width: 100%;
-    max-width: 440px;
-  }
-
-  .arcade-card {
-    padding: 16px;
-    gap: 11px;
-  }
-
-  .arcade-btn {
-    padding: 11px 14px;
-    font-size: 13px;
   }
 
   .staging-content-layout {
@@ -3186,47 +3100,6 @@ body.touch-device #touch-controls.visible {
 
   .hud-radar-card {
     bottom: 80px;
-  }
-}
-
-@media (max-height: 520px) {
-  /* Mobile Landscape optimization */
-  .screen-split-layout {
-    padding: 44px 12px 8px 12px;
-  }
-
-  .menu-left-panel,
-  .menu-right-panel {
-    max-height: calc(100vh - 50px);
-  }
-
-  .arcade-card {
-    padding: 10px 12px;
-    gap: 8px;
-  }
-
-  .arcade-btn {
-    padding: 7px 11px;
-    font-size: 12px;
-    letter-spacing: 1px;
-  }
-
-  .arcade-stepper-btn {
-    width: 32px;
-    height: 32px;
-  }
-
-  .ship-selector-hero {
-    padding: 6px 10px;
-  }
-
-  .ship-hero-info .ship-title-text {
-    font-size: 15px;
-  }
-
-  .ship-specs-container {
-    padding: 8px 10px;
-    gap: 6px;
   }
 }
 

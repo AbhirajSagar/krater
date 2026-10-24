@@ -242,20 +242,13 @@ function updateViewportAndAspectRatio() {
   updateMenuLayout();
 }
 
-// Game State Switching Functions & Floating Menu Layout
+// Game State Switching Functions & Floating Menu Layout (Fixed Laptop / Desktop Menu Layout)
 function updateMenuLayout() {
   if (currentGameState !== 'MENU') return;
-  const isSmall = window.innerWidth <= 900;
-  if (isSmall) {
-    if (spaceship) spaceship.root.position.set(0, 0.1, 0);
-    baseCamPos.set(0, 0.75, 6.2);
-    baseCamLook.set(0, 0.1, 0);
-  } else {
-    // Desktop: ship is centered in viewport between left hangar and right menu panels
-    if (spaceship) spaceship.root.position.set(-0.75, -0.15, 0);
-    baseCamPos.set(0, 0.8, 5.8);
-    baseCamLook.set(0, 0.2, 0);
-  }
+  // Laptop menu layout: ship is centered in viewport between left hangar and right menu panels
+  if (spaceship) spaceship.root.position.set(-0.75, -0.15, 0);
+  baseCamPos.set(0, 0.8, 5.8);
+  baseCamLook.set(0, 0.2, 0);
   camera.position.copy(baseCamPos);
   camera.lookAt(baseCamLook);
 }
