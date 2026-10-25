@@ -77,6 +77,7 @@ export class AsteroidField {
 
     this.onAsteroidDestroyed = null;
     this.onAsteroidDamaged = null;
+    this.enabled = true;
 
     // 7. Instantiate asteroid mesh pool
     for (let i = 0; i < count; i++) {
@@ -109,24 +110,63 @@ export class AsteroidField {
   }
 
   /**
+   * Toggles asteroid field visibility and collision processing
+   * @param {boolean} enabled
+   */
+  setEnabled(enabled) {
+    this.enabled = !!enabled;
+    this.group.visible = this.enabled;
+    if (!this.enabled) {
+      if (this.fragmentPool) {
+        for (const frag of this.fragmentPool) {
+          frag.active = false;
+          frag.mesh.visible = false;
+        }
+      }
+      if (this.shockwaves) {
+        for (const sw of this.shockwaves) {
+          sw.active = false;
+          sw.mesh.visible = false;
+        }
+      }
+    }
+    this._meshesNeedUpdate = true;
+  }
+
+  /**
    * Deterministically regenerates/aligns all asteroid positions, sizes, and orientations
    * ensuring 100% spatial and visual synchronization across all multiplayer clients
    * @param {string|number} seedInput Room code or unique seed
+   * @param {object} [config={}] Optional overrides for count, spawn radii, heightRange, enabled
    */
-  reseed(seedInput = 'spacegame_default_sector') {
+  reseed(seedInput = 'spacegame_default_sector', config = {}) {
+    if (config.enabled === false) {
+      this.setEnabled(false);
+      return;
+    }
+    this.setEnabled(true);
+
     this.seed = seedInput;
     const rnd = createPRNG(seedInput);
-    const spawnRadiusMin = 40;
-    const spawnRadiusMax = 450;
+    const spawnRadiusMin = config.spawnRadiusMin ?? 40;
+    const spawnRadiusMax = config.spawnRadiusMax ?? 450;
+    const heightRange = config.heightRange ?? 120;
+    const activeCount = Math.min(this.asteroids.length, config.count ?? this.count);
     const baseRadii = [1.0, 1.4, 2.2];
 
-    for (let i = 0; i < this.count; i++) {
+    for (let i = 0; i < this.asteroids.length; i++) {
       const a = this.asteroids[i];
       if (!a) continue;
 
+      if (i >= activeCount) {
+        a.isDestroyed = true;
+        a.mesh.visible = false;
+        continue;
+      }
+
       const angle = rnd() * Math.PI * 2;
       const dist = spawnRadiusMin + rnd() * (spawnRadiusMax - spawnRadiusMin);
-      const height = (rnd() - 0.5) * 120;
+      const height = (rnd() - 0.5) * heightRange;
 
       a.mesh.position.set(
         Math.cos(angle) * dist,
@@ -484,6 +524,7 @@ export class AsteroidField {
    * @returns {boolean} True if hit
    */
   checkLaserHit(oldPos, newPos, laserColorHex = '#ff2244') {
+    if (!this.enabled || !this.group.visible) return false;
     _seg.subVectors(newPos, oldPos);
     const segLenSq = _seg.lengthSq();
     if (segLenSq < 0.0001) return false;
@@ -636,6 +677,7 @@ export class AsteroidField {
    * Reuses internal array to eliminate garbage collection
    */
   getMeshes() {
+    if (!this.enabled || !this.group.visible) return [];
     if (this._meshesNeedUpdate) {
       this._cachedMeshes.length = 0;
 
@@ -659,6 +701,7 @@ export class AsteroidField {
   }
 
   update(dt) {
+    if (!this.enabled || !this.group.visible) return;
     // 1. Update sparks
     this.updateSparks(dt);
 

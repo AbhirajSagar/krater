@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { LoadingScreen } from './LoadingScreen.js';
 import { SkyboxManager } from './SkyboxManager.js';
+import { MapManager } from './MapManager.js';
 import { SpaceshipController } from './SpaceshipController.js';
 import { SpaceDust } from './SpaceDust.js';
 import { AsteroidField } from './AsteroidField.js';
@@ -103,6 +104,7 @@ let spaceship = null;
 let spaceDust = null;
 let asteroidField = null;
 let skyboxManager = null;
+let mapManager = null;
 let client = null;
 let remotePlayersManager = null;
 let combatHUD = null;
@@ -277,7 +279,10 @@ function enterMainMenu(advanceSkybox = false) {
     spaceship.velocity.set(0, 0, 0);
     spaceship.currentSpeed = 0;
   }
-  if (combatHUD) combatHUD.hide();
+  if (combatHUD) {
+    combatHUD.hide();
+    combatHUD.hideDestroyedOverlay();
+  }
   if (lobbyUI) lobbyUI.showMenu();
   if (crosshairContainer) {
     crosshairContainer.classList.remove('visible');
@@ -287,11 +292,17 @@ function enterMainMenu(advanceSkybox = false) {
   if (minimalAmmoHUD) minimalAmmoHUD.classList.remove('visible');
   if (touchControls) touchControls.resetAll();
   if (remotePlayersManager) remotePlayersManager.clear();
-  if (asteroidField) asteroidField.reseed('spacegame_menu_sector');
+  if (asteroidField && mapManager?.currentMap?.asteroids?.enabled !== false) {
+    asteroidField.reseed('spacegame_menu_sector', mapManager?.currentMap?.asteroids || {});
+  }
 
-  // If returning from battle, advance sequentially to the next skybox for the next match
-  if (advanceSkybox && skyboxManager) {
-    skyboxManager.loadNextSequentialSkybox().catch(() => {});
+  // If returning from battle, advance sequentially to the next arena map for the next match
+  if (advanceSkybox) {
+    if (mapManager) {
+      mapManager.loadNextSequentialMap().catch(() => {});
+    } else if (skyboxManager) {
+      skyboxManager.loadNextSequentialSkybox().catch(() => {});
+    }
   }
 
   updateMenuLayout();
@@ -343,14 +354,17 @@ function startBattle(room = null, isSolo = false) {
 
   if (room && client) {
     if (combatHUD) combatHUD.setRoomInfo(room.code);
-    if (room.customData?.skybox && skyboxManager) {
+    if (room.customData?.mapId && mapManager) {
+      mapManager.loadMapById(room.customData.mapId).catch(() => {});
+    } else if (room.customData?.skybox && skyboxManager) {
       skyboxManager.loadSkybox(room.customData.skybox).catch(() => {});
     }
 
     // Deterministically synchronize asteroid field layout across all pilots in this room
     if (asteroidField) {
       const roomSeed = room.customData?.seed || room.code || room.id || 'default_space_sector';
-      asteroidField.reseed(roomSeed);
+      const astConfig = mapManager?.currentMap?.asteroids || {};
+      asteroidField.reseed(roomSeed, astConfig);
     }
 
     // Populate remote players
@@ -381,7 +395,9 @@ function startBattle(room = null, isSolo = false) {
     client.relay('REQUEST_WORLD_STATE', { from: client.playerId });
   } else {
     if (combatHUD) combatHUD.setRoomInfo(null);
-    if (asteroidField) asteroidField.reseed('spacegame_solo_sector');
+    if (asteroidField && mapManager?.currentMap?.asteroids?.enabled !== false) {
+      asteroidField.reseed('spacegame_solo_sector', mapManager?.currentMap?.asteroids || {});
+    }
   }
 }
 
@@ -752,20 +768,23 @@ function bindNetworkEvents() {
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
         client.relay('PLAYER_KILLED', { victimId: client.playerId, killerId }, 'all');
         client.updatePlayerState({ deaths: localDeaths, isDestroyed: true });
-
-        // Kick the dead player off the match immediately
-        client.leaveRoom();
       }
 
-      // Show alert toast
-      if (lobbyUI) {
-        lobbyUI.showToast('SHIP DESTROYED · YOU HAVE BEEN ELIMINATED', 'error');
+      // Determine killer identity
+      let killerName = 'Environmental Hazard';
+      if (killerId && remotePlayersManager) {
+        const killerP = remotePlayersManager.getPlayer(killerId);
+        if (killerP) {
+          killerName = killerP.name;
+        } else {
+          killerName = 'Hostile Pilot';
+        }
       }
 
-      // Kick off the game back to main menu after short explosion visual
-      setTimeout(() => {
-        enterMainMenu(true);
-      }, 1200);
+      // Present dedicated death screen with countdown, Respawn Now, and Return to Menu
+      if (combatHUD) {
+        combatHUD.showDestroyedOverlay(killerName, 5);
+      }
     };
   }
 
@@ -789,13 +808,21 @@ async function initPipeline() {
   crosshairContainer = document.getElementById('crosshair-container');
   touchControlsContainer = document.getElementById('touch-controls');
 
-  // Phase 1: Skybox Textures (Sequential selection so each skybox gets its turn)
+  // Phase 1: Arena Maps & Skybox Textures
   skyboxManager = new SkyboxManager(scene, renderer);
-  await skyboxManager.loadNextSequentialSkybox((progress) => {
+  mapManager = new MapManager({
+    scene,
+    renderer,
+    skyboxManager,
+    ambientLight,
+    sunLight,
+    hemisphereLight
+  });
+  await mapManager.loadNextSequentialMap((progress) => {
     const pct = 15 + Math.round((progress.loaded / progress.total) * 25);
     loadingScreen.setProgress(pct);
   }).catch((err) => {
-    console.warn('Initial skybox load fallback:', err);
+    console.warn('Initial map load fallback:', err);
   });
 
   // Phase 2: Local Spaceship Controller
@@ -831,10 +858,15 @@ async function initPipeline() {
   loadingScreen.setProgress(84);
   asteroidField = new AsteroidField(scene, 140, 'spacegame_menu_sector');
   spaceship.setAsteroidField(asteroidField);
+  if (mapManager) {
+    mapManager.setAsteroidField(asteroidField);
+  }
 
   loadingScreen.setProgress(88);
   spaceDust = new SpaceDust(scene);
-  if (skyboxManager) {
+  if (mapManager) {
+    mapManager.setSpaceDust(spaceDust);
+  } else if (skyboxManager) {
     if (skyboxManager.currentSkybox) {
       spaceDust.setTheme(skyboxManager.currentSkybox.id);
     }
@@ -881,21 +913,36 @@ async function initPipeline() {
     },
     onRespawnRequest: () => {
       combatHUD.hideDestroyedOverlay();
-      spaceship.respawn();
-      client.relay('PLAYER_RESPAWNED', { playerId: client.playerId, pos: spaceship.root.position.toArray() });
-      client.updatePlayerState({
-        shield: 100,
-        health: 100,
-        isDestroyed: false,
-        score: localScore,
-        kills: localKills,
-        deaths: localDeaths,
-      });
-      combatHUD.showCombatBanner('SYSTEMS RESTORED - SHIELD MATRIX CHARGED');
+
+      // Dynamic spawn placement around arena
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 60 + Math.random() * 80;
+      const spawnPos = new THREE.Vector3(
+        Math.cos(angle) * radius,
+        (Math.random() - 0.5) * 30,
+        Math.sin(angle) * radius
+      );
+
+      spaceship.respawn(spawnPos);
+
+      if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
+        client.relay('PLAYER_RESPAWNED', { playerId: client.playerId, pos: spaceship.root.position.toArray() });
+        client.updatePlayerState({
+          shield: 100,
+          health: 100,
+          isDestroyed: false,
+          score: localScore,
+          kills: localKills,
+          deaths: localDeaths,
+          position: spaceship.root.position.toArray()
+        });
+      }
+      combatHUD.showCombatBanner('SYSTEMS RESTORED - SHIELDS ONLINE');
     },
     onLeaveMatch: () => {
-      if (client) client.leaveRoom();
-      enterMainMenu();
+      combatHUD.hideDestroyedOverlay();
+      if (client && client.isInRoom()) client.leaveRoom();
+      enterMainMenu(true);
     }
   });
 
@@ -903,6 +950,7 @@ async function initPipeline() {
     client,
     spaceship,
     skyboxManager,
+    mapManager,
     onStartSolo: () => {
       startBattle(null, true);
     },

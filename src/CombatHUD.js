@@ -105,6 +105,9 @@ export class CombatHUD {
         </div>
       </div>
 
+      <!-- IN-VIEW ENEMY TARGET BRACKETS & CALLSIGNS -->
+      <div class="hud-world-targets" id="hud-world-targets"></div>
+
       <!-- OFF-SCREEN ENEMY DIRECTIONAL ARROWS -->
       <div class="hud-offscreen-indicators" id="hud-offscreen-indicators"></div>
 
@@ -202,13 +205,17 @@ export class CombatHUD {
       <!-- DESTRUCTION & RESPAWN OVERLAY -->
       <div class="hud-respawn-backdrop hidden" id="hud-respawn-overlay">
         <div class="respawn-glass-card">
-          <div class="respawn-title-clean">Vessel Compromised</div>
-          <div class="respawn-killer-clean" id="hud-killer-text">Eliminated by enemy fire</div>
+          <div class="respawn-badge">VESSEL COMPROMISED</div>
+          <div class="respawn-title-clean">CRITICAL DAMAGE</div>
+          <div class="respawn-killer-clean" id="hud-killer-text">Eliminated by enemy laser fire</div>
           <div class="respawn-timer-wrap">
             <span class="respawn-digits" id="hud-respawn-countdown">5</span>
-            <span class="respawn-seconds-label">seconds to respawn</span>
+            <span class="respawn-seconds-label">seconds to auto-respawn</span>
           </div>
-          <button id="btn-manual-respawn" class="btn-primary-solid">Respawn Now</button>
+          <div class="respawn-actions-row">
+            <button id="btn-manual-respawn" class="btn-primary-solid" type="button">Respawn Now</button>
+            <button id="btn-respawn-leave" class="btn-secondary-outline" type="button">Return to Menu</button>
+          </div>
         </div>
       </div>
 
@@ -245,6 +252,10 @@ export class CombatHUD {
     this.lockDistEl = document.getElementById('hud-lock-dist');
     this.lockHealthEl = document.getElementById('hud-lock-health');
 
+    this.inViewContainer = document.getElementById('hud-world-targets');
+    this.targetBracketsMap = new Map();
+    this.offscreenArrowsMap = new Map();
+
     this.offscreenContainer = document.getElementById('hud-offscreen-indicators');
     this.killFeedEl = document.getElementById('hud-kill-feed');
 
@@ -264,6 +275,7 @@ export class CombatHUD {
     this.killerTextEl = document.getElementById('hud-killer-text');
     this.respawnCountdownEl = document.getElementById('hud-respawn-countdown');
     this.manualRespawnBtn = document.getElementById('btn-manual-respawn');
+    this.respawnLeaveBtn = document.getElementById('btn-respawn-leave');
 
     this.resultsOverlayEl = document.getElementById('hud-results-overlay');
     this.resultsTitleEl = document.getElementById('hud-results-title');
@@ -307,6 +319,13 @@ export class CombatHUD {
     this.manualRespawnBtn?.addEventListener('click', () => {
       if (this.onRespawnRequest) {
         this.onRespawnRequest();
+      }
+    });
+
+    this.respawnLeaveBtn?.addEventListener('click', () => {
+      this.hideDestroyedOverlay();
+      if (this.onLeaveMatch) {
+        this.onLeaveMatch();
       }
     });
 
@@ -563,86 +582,181 @@ export class CombatHUD {
 
     if (!camera || !localShipPos) return;
 
-    // Target lock
-    const target = remotePlayersManager ? remotePlayersManager.getNearestTargetInAim(camera, 0.16) : null;
-    if (target && !target.player.isDestroyed) {
-      this.targetLockEl?.classList.remove('hidden');
-      const sx = (target.screenX * 0.5 + 0.5) * window.innerWidth;
-      const sy = (-target.screenY * 0.5 + 0.5) * window.innerHeight;
-
-      if (this.targetLockEl) {
-        this.targetLockEl.style.left = `${sx}px`;
-        this.targetLockEl.style.top = `${sy}px`;
-      }
-      if (this.lockNameEl) this.lockNameEl.textContent = target.player.name;
-      if (this.lockDistEl) this.lockDistEl.textContent = `${Math.round(target.worldDistance)}m`;
-      if (this.lockHealthEl) {
-        const hpPct = Math.max(0, Math.min(100, (target.player.health / target.player.maxHealth) * 100));
-        this.lockHealthEl.style.width = `${hpPct}%`;
-      }
-    } else {
-      this.targetLockEl?.classList.add('hidden');
-    }
-
-    this.updateOffScreenIndicators(camera, localShipPos, remotePlayersManager);
+    this.updateTacticalTargets(camera, localShipPos, remotePlayersManager);
     this.drawRadar(localShipPos, localShipQuat, remotePlayersManager, asteroidField);
   }
 
-  updateOffScreenIndicators(camera, localShipPos, remotePlayersManager) {
-    if (!this.offscreenContainer || !remotePlayersManager) return;
+  updateTacticalTargets(camera, localShipPos, remotePlayersManager) {
+    if (!this.inViewContainer || !this.offscreenContainer || !remotePlayersManager) return;
     const players = remotePlayersManager.getAllPlayers();
-    this.offscreenContainer.innerHTML = '';
+    const activePlayerIds = new Set();
 
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const margin = 32;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const margin = 38;
+    const halfW = (w / 2) - margin;
+    const halfH = (h / 2) - margin;
 
     for (const p of players) {
-      if (p.isDestroyed || !p.root.visible) continue;
+      if (p.isDestroyed || !p.root.visible) {
+        const b = this.targetBracketsMap.get(p.id);
+        if (b) b.el.style.display = 'none';
+        const a = this.offscreenArrowsMap.get(p.id);
+        if (a) a.el.style.display = 'none';
+        continue;
+      }
+
+      activePlayerIds.add(p.id);
 
       this._scratchVec.copy(p.root.position);
       this._screenVec.copy(this._scratchVec).project(camera);
 
-      const isBehind = this._screenVec.z < 0 || this._screenVec.z > 1;
-      const isOffScreen = isBehind || Math.abs(this._screenVec.x) > 0.95 || Math.abs(this._screenVec.y) > 0.95;
+      const dist = Math.round(localShipPos.distanceTo(p.root.position));
+      const isInFront = this._screenVec.z >= 0 && this._screenVec.z <= 1;
+      const isInView = isInFront && Math.abs(this._screenVec.x) <= 0.94 && Math.abs(this._screenVec.y) <= 0.94;
 
-      if (isOffScreen) {
-        let x = this._screenVec.x;
-        let y = this._screenVec.y;
+      if (isInView) {
+        // Hide off-screen arrow
+        const arrow = this.offscreenArrowsMap.get(p.id);
+        if (arrow) arrow.el.style.display = 'none';
 
-        if (isBehind) {
-          x = -x;
-          y = -y;
+        // Show in-view bracket
+        let bracket = this.targetBracketsMap.get(p.id);
+        if (!bracket) {
+          const el = document.createElement('div');
+          el.className = 'inview-target-bracket';
+          el.innerHTML = `
+            <div class="bracket-reticle">
+              <span class="corner-tick tick-tl"></span>
+              <span class="corner-tick tick-tr"></span>
+              <span class="corner-tick tick-bl"></span>
+              <span class="corner-tick tick-br"></span>
+              <div class="bracket-diamond"></div>
+            </div>
+            <div class="bracket-meta">
+              <div class="bracket-header">
+                <span class="bracket-callsign"></span>
+                <span class="bracket-dist"></span>
+              </div>
+              <div class="bracket-vitals">
+                <div class="mini-bar-track shield-track"><div class="mini-bar-fill shield-fill"></div></div>
+                <div class="mini-bar-track hull-track"><div class="mini-bar-fill hull-fill"></div></div>
+              </div>
+            </div>
+          `;
+          this.inViewContainer.appendChild(el);
+          bracket = {
+            el,
+            callsignEl: el.querySelector('.bracket-callsign'),
+            distEl: el.querySelector('.bracket-dist'),
+            shieldFill: el.querySelector('.shield-fill'),
+            hullFill: el.querySelector('.hull-fill'),
+          };
+          this.targetBracketsMap.set(p.id, bracket);
         }
 
-        const angle = Math.atan2(y, x);
+        const sx = (this._screenVec.x * 0.5 + 0.5) * w;
+        const sy = (-this._screenVec.y * 0.5 + 0.5) * h;
+        const screenDist = Math.hypot(this._screenVec.x, this._screenVec.y);
+        const isLocked = screenDist <= 0.18;
+
+        const sPct = Math.max(0, Math.min(100, Math.round((p.shield / (p.maxShield || 100)) * 100)));
+        const hPct = Math.max(0, Math.min(100, Math.round((p.health / (p.maxHealth || 100)) * 100)));
+
+        bracket.callsignEl.textContent = p.name;
+        bracket.distEl.textContent = `${dist}m`;
+        bracket.shieldFill.style.width = `${sPct}%`;
+        bracket.hullFill.style.width = `${hPct}%`;
+        if (hPct <= 25) {
+          bracket.hullFill.classList.add('critical');
+        } else {
+          bracket.hullFill.classList.remove('critical');
+        }
+
+        if (isLocked) {
+          bracket.el.classList.add('is-locked');
+        } else {
+          bracket.el.classList.remove('is-locked');
+        }
+
+        const scale = THREE.MathUtils.clamp(1.15 - (dist / 650) * 0.35, 0.72, 1.25);
+        bracket.el.style.left = `${sx.toFixed(1)}px`;
+        bracket.el.style.top = `${sy.toFixed(1)}px`;
+        bracket.el.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(2)})`;
+        bracket.el.style.display = 'flex';
+
+      } else {
+        // Hide in-view bracket
+        const bracket = this.targetBracketsMap.get(p.id);
+        if (bracket) bracket.el.style.display = 'none';
+
+        // Show off-screen indicator
+        let arrow = this.offscreenArrowsMap.get(p.id);
+        if (!arrow) {
+          const el = document.createElement('div');
+          el.className = 'clean-offscreen-arrow';
+          el.innerHTML = `
+            <div class="arrow-shape">▲</div>
+            <div class="arrow-text"></div>
+          `;
+          this.offscreenContainer.appendChild(el);
+          arrow = {
+            el,
+            shapeEl: el.querySelector('.arrow-shape'),
+            textEl: el.querySelector('.arrow-text')
+          };
+          this.offscreenArrowsMap.set(p.id, arrow);
+        }
+
+        let nx = this._screenVec.x;
+        let ny = this._screenVec.y;
+        if (!isInFront) {
+          nx = -nx;
+          ny = -ny;
+        }
+        if (Math.abs(nx) < 0.0001 && Math.abs(ny) < 0.0001) {
+          nx = 0; ny = 1;
+        }
+
+        const angle = Math.atan2(ny, nx);
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
 
-        let edgeX, edgeY;
-        if (Math.abs(cos * height) > Math.abs(sin * width)) {
-          edgeX = cos > 0 ? width - margin : margin;
-          edgeY = height / 2 - (cos > 0 ? (width / 2 - margin) : -(width / 2 - margin)) * Math.tan(angle);
+        const edgeScale = Math.min(
+          Math.abs(halfW / (cos || 0.0001)),
+          Math.abs(halfH / (sin || 0.0001))
+        );
+
+        const edgeX = THREE.MathUtils.clamp((w / 2) + cos * edgeScale, margin, w - margin);
+        const edgeY = THREE.MathUtils.clamp((h / 2) - sin * edgeScale, margin, h - margin);
+        const rotDeg = (-angle * 180 / Math.PI) + 90;
+
+        arrow.textEl.textContent = `${p.name} · ${dist}m`;
+        arrow.shapeEl.style.transform = `rotate(${rotDeg.toFixed(1)}deg)`;
+        arrow.el.style.left = `${edgeX.toFixed(1)}px`;
+        arrow.el.style.top = `${edgeY.toFixed(1)}px`;
+
+        if (dist < 160) {
+          arrow.el.classList.add('is-danger');
         } else {
-          edgeY = sin > 0 ? margin : height - margin;
-          edgeX = width / 2 + (sin > 0 ? (height / 2 - margin) : -(height / 2 - margin)) / Math.tan(angle);
+          arrow.el.classList.remove('is-danger');
         }
 
-        edgeX = Math.max(margin, Math.min(width - margin, edgeX));
-        edgeY = Math.max(margin, Math.min(height - margin, edgeY));
+        arrow.el.style.display = 'flex';
+      }
+    }
 
-        const dist = Math.round(localShipPos.distanceTo(p.root.position));
-        const rotDeg = (Math.atan2(-sin, cos) * 180) / Math.PI;
-
-        const arrowEl = document.createElement('div');
-        arrowEl.className = 'clean-offscreen-arrow';
-        arrowEl.style.left = `${edgeX}px`;
-        arrowEl.style.top = `${edgeY}px`;
-        arrowEl.innerHTML = `
-          <div class="arrow-shape" style="transform: rotate(${rotDeg}deg);">▲</div>
-          <div class="arrow-text">${escapeHTML(p.name)} · ${dist}m</div>
-        `;
-        this.offscreenContainer.appendChild(arrowEl);
+    // Clean up disconnected players
+    for (const [id, b] of this.targetBracketsMap.entries()) {
+      if (!activePlayerIds.has(id)) {
+        b.el.remove();
+        this.targetBracketsMap.delete(id);
+      }
+    }
+    for (const [id, a] of this.offscreenArrowsMap.entries()) {
+      if (!activePlayerIds.has(id)) {
+        a.el.remove();
+        this.offscreenArrowsMap.delete(id);
       }
     }
   }

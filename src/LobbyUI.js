@@ -9,6 +9,7 @@ import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
 import { SPARROW_THEMES } from './StarSparrowMaterial.js';
 import { sounds } from './SoundManager.js';
 import { Icons } from './Icons.js';
+import { MAPS_CONFIG, getMapById, getDefaultMap } from './mapsConfig.js';
 
 const CALLSIGN_NAMES = [
   'Viper', 'Ghost', 'Phoenix', 'Nova', 'Shadow', 'Falcon', 'Reaper', 
@@ -28,19 +29,12 @@ export const COLOR_SWATCHES = [
   { key: 'Yellow', name: 'Gold', hex: '#eab308' },
 ];
 
-export const SKYBOX_OPTIONS = [
-  { id: 'purple_nebula', name: 'Purple Nebula', shortName: 'Purple Nebula', color: '#a855f7', glow: 'rgba(168, 85, 247, 0.45)' },
-  { id: 'blue_nebula', name: 'Blue Nebula', shortName: 'Blue Nebula', color: '#00f0ff', glow: 'rgba(0, 240, 255, 0.45)' },
-  { id: 'blue_pink', name: 'Blue Pink Nebula', shortName: 'Blue Pink', color: '#ec4899', glow: 'rgba(236, 72, 153, 0.45)' },
-  { id: 'deep_space', name: 'Deep Space', shortName: 'Deep Space', color: '#94a3b8', glow: 'rgba(148, 163, 184, 0.45)' },
-  { id: 'golden_galaxy', name: 'Golden Galaxy', shortName: 'Golden Galaxy', color: '#f59e0b', glow: 'rgba(245, 158, 11, 0.45)' }
-];
-
 export class LobbyUI {
   constructor(options = {}) {
     this.client = options.client;
     this.spaceship = options.spaceship;
     this.skyboxManager = options.skyboxManager;
+    this.mapManager = options.mapManager || null;
 
     this.onStartSolo = options.onStartSolo || null;
     this.onEnterBattle = options.onEnterBattle || null;
@@ -80,12 +74,11 @@ export class LobbyUI {
     }
     this.root = root;
 
-    const activeSkyboxId = this.skyboxManager?.currentSkybox?.id 
-      || this.skyboxManager?.skyboxes?.[this.skyboxManager?.getStoredIndex?.() || 0]?.id 
-      || 'blue_nebula';
-    const activeSkyboxName = this.skyboxManager?.currentSkybox?.name 
-      || SKYBOX_OPTIONS.find(s => s.id === activeSkyboxId)?.name 
-      || 'Blue Nebula';
+    const activeMap = this.mapManager?.getCurrentMap?.() 
+      || getMapById(this.mapManager?.getStoredMapId?.())
+      || getDefaultMap();
+    const activeMapId = activeMap.id;
+    const activeMapName = activeMap.name;
 
     this.root.innerHTML = `
       <!-- ================= MAIN MENU SCREEN (Ship Selector on Left, Menu Options on Right) ================= -->
@@ -187,20 +180,20 @@ export class LobbyUI {
               </div>
             </div>
 
-            <!-- Environment / Skybox Selection Section -->
-            <div class="menu-skybox-section">
-              <div class="menu-skybox-header">
-                <span class="menu-skybox-title">ENVIRONMENT</span>
-                <span class="menu-skybox-badge" id="menu-skybox-badge">${activeSkyboxName}</span>
+            <!-- Arena Map Selection Section -->
+            <div class="menu-skybox-section menu-map-section">
+              <div class="menu-skybox-header menu-map-header">
+                <span class="menu-skybox-title menu-map-title">ARENA MAP</span>
+                <span class="menu-skybox-badge menu-map-badge" id="menu-map-badge">${activeMapName}</span>
               </div>
-              <div class="menu-skybox-grid" id="menu-skybox-grid">
-                ${SKYBOX_OPTIONS.map(opt => `
-                  <button class="menu-skybox-btn ${opt.id === activeSkyboxId ? 'active' : ''}" 
-                          data-skybox-id="${opt.id}" 
+              <div class="menu-skybox-grid menu-map-grid" id="menu-map-grid">
+                ${MAPS_CONFIG.map(m => `
+                  <button class="menu-skybox-btn menu-map-btn ${m.id === activeMapId ? 'active' : ''}" 
+                          data-map-id="${m.id}" 
                           type="button" 
-                          title="${opt.name}">
-                    <span class="menu-skybox-dot" style="background: ${opt.color}; box-shadow: 0 0 8px ${opt.glow};"></span>
-                    <span class="menu-skybox-label">${opt.shortName}</span>
+                          title="${m.description}">
+                    <span class="menu-skybox-dot menu-map-dot" style="background: ${m.color}; box-shadow: 0 0 8px ${m.glow};"></span>
+                    <span class="menu-skybox-label menu-map-label">${m.shortName}</span>
                   </button>
                 `).join('')}
               </div>
@@ -437,13 +430,11 @@ export class LobbyUI {
               </div>
 
               <div class="form-field">
-                <label for="create-skybox">Environment</label>
-                <select id="create-skybox">
-                  <option value="blue_nebula">Blue Nebula</option>
-                  <option value="blue_pink">Blue Pink Nebula</option>
-                  <option value="deep_space">Deep Space</option>
-                  <option value="golden_galaxy">Golden Galaxy</option>
-                  <option value="purple_nebula">Purple Nebula</option>
+                <label for="create-map">Arena Map</label>
+                <select id="create-map">
+                  ${MAPS_CONFIG.map(m => `
+                    <option value="${m.id}" ${m.id === activeMapId ? 'selected' : ''}>${m.name} (${m.badge})</option>
+                  `).join('')}
                 </select>
               </div>
             </div>
@@ -672,30 +663,36 @@ export class LobbyUI {
       });
     });
 
-    // Environment Skybox Selection in right side menu
-    this.skyboxGrid = document.getElementById('menu-skybox-grid');
-    this.skyboxBadge = document.getElementById('menu-skybox-badge');
+    // Arena Map Selection in right side menu
+    this.mapGrid = document.getElementById('menu-map-grid');
+    this.mapBadge = document.getElementById('menu-map-badge');
 
-    this.skyboxGrid?.querySelectorAll('.menu-skybox-btn').forEach(btn => {
+    this.mapGrid?.querySelectorAll('.menu-map-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         sounds.playClick();
-        const skyboxId = btn.getAttribute('data-skybox-id');
-        if (skyboxId) {
-          this.selectSkybox(skyboxId);
+        const mapId = btn.getAttribute('data-map-id');
+        if (mapId) {
+          this.selectMap(mapId);
         }
       });
     });
 
-    // Sync when create-skybox select in Create modal changes
-    document.getElementById('create-skybox')?.addEventListener('change', (e) => {
-      this.selectSkybox(e.target.value);
+    // Sync when create-map select in Create modal changes
+    document.getElementById('create-map')?.addEventListener('change', (e) => {
+      this.selectMap(e.target.value);
     });
 
-    // Listen to changes from SkyboxManager (e.g. sequential advance on match end)
-    if (this.skyboxManager && typeof this.skyboxManager.onSkyboxChange === 'function') {
+    // Listen to changes from MapManager (e.g. sequential advance on match end)
+    if (this.mapManager && typeof this.mapManager.onMapChange === 'function') {
+      this.mapManager.onMapChange((map) => {
+        if (map && map.id) {
+          this.updateActiveMapUI(map.id, map.name);
+        }
+      });
+    } else if (this.skyboxManager && typeof this.skyboxManager.onSkyboxChange === 'function') {
       this.skyboxManager.onSkyboxChange((skybox) => {
         if (skybox && skybox.id) {
-          this.updateActiveSkyboxUI(skybox.id, skybox.name);
+          this.updateActiveMapUI(skybox.id, skybox.name);
         }
       });
     }
@@ -980,20 +977,29 @@ export class LobbyUI {
     }
   }
 
-  selectSkybox(skyboxId) {
-    if (!this.skyboxManager) return;
-    this.skyboxManager.loadById(skyboxId).catch(err => {
-      console.warn('Failed to load skybox:', err);
-    });
-    this.updateActiveSkyboxUI(skyboxId);
+  selectMap(mapId) {
+    if (this.mapManager) {
+      this.mapManager.loadMapById(mapId).catch(err => {
+        console.warn('Failed to load map:', err);
+      });
+    } else if (this.skyboxManager) {
+      this.skyboxManager.loadById(mapId).catch(err => {
+        console.warn('Failed to load skybox:', err);
+      });
+    }
+    this.updateActiveMapUI(mapId);
   }
 
-  updateActiveSkyboxUI(skyboxId, skyboxName = null) {
-    if (!skyboxId) return;
-    const grid = document.getElementById('menu-skybox-grid');
+  selectSkybox(skyboxId) {
+    this.selectMap(skyboxId);
+  }
+
+  updateActiveMapUI(mapId, mapName = null) {
+    if (!mapId) return;
+    const grid = document.getElementById('menu-map-grid');
     if (grid) {
-      grid.querySelectorAll('.menu-skybox-btn').forEach(btn => {
-        if (btn.getAttribute('data-skybox-id') === skyboxId) {
+      grid.querySelectorAll('.menu-map-btn').forEach(btn => {
+        if (btn.getAttribute('data-map-id') === mapId) {
           btn.classList.add('active');
         } else {
           btn.classList.remove('active');
@@ -1001,17 +1007,21 @@ export class LobbyUI {
       });
     }
 
-    const badge = document.getElementById('menu-skybox-badge');
+    const badge = document.getElementById('menu-map-badge');
     if (badge) {
-      const match = SKYBOX_OPTIONS.find(s => s.id === skyboxId);
-      badge.textContent = skyboxName || (match ? match.name : skyboxId);
+      const match = MAPS_CONFIG.find(m => m.id === mapId);
+      badge.textContent = mapName || (match ? match.name : mapId);
     }
 
     // Also sync the dropdown in Create Room modal if present
-    const createSelect = document.getElementById('create-skybox');
-    if (createSelect && createSelect.value !== skyboxId) {
-      createSelect.value = skyboxId;
+    const createSelect = document.getElementById('create-map');
+    if (createSelect && createSelect.value !== mapId) {
+      createSelect.value = mapId;
     }
+  }
+
+  updateActiveSkyboxUI(skyboxId, skyboxName = null) {
+    this.updateActiveMapUI(skyboxId, skyboxName);
   }
 
   checkDeepLink() {
@@ -1048,9 +1058,9 @@ export class LobbyUI {
     try {
       await this.ensureConnected();
 
-      const defaultSkybox = this.skyboxManager
-        ? (this.skyboxManager.currentSkybox?.id || this.skyboxManager.getNextSequentialSkyboxId())
-        : 'blue_nebula';
+      const activeMap = this.mapManager?.getCurrentMap?.() || getDefaultMap();
+      const defaultMapId = activeMap.id;
+      const defaultSkybox = activeMap.skybox?.id || 'deep_space';
 
       const res = await this.client.quickJoin({
         player: {
@@ -1066,6 +1076,7 @@ export class LobbyUI {
           gameType: 'spacebattle',
           maxPlayers: 8,
           customData: {
+            mapId: defaultMapId,
             skybox: defaultSkybox,
             gameMode: 'Dogfight'
           }
@@ -1113,10 +1124,11 @@ export class LobbyUI {
     try {
       const name = document.getElementById('create-room-name')?.value?.trim() || `${this.callsign}'s Game`;
       const maxPlayers = parseInt(document.getElementById('create-max-players')?.value || '8', 10);
-      const defaultSkybox = this.skyboxManager
-        ? (this.skyboxManager.currentSkybox?.id || this.skyboxManager.getNextSequentialSkyboxId())
-        : 'blue_nebula';
-      const skybox = document.getElementById('create-skybox')?.value || defaultSkybox;
+      const activeMap = this.mapManager?.getCurrentMap?.() || getDefaultMap();
+      const defaultMapId = activeMap.id;
+      const mapId = document.getElementById('create-map')?.value || defaultMapId;
+      const targetMap = getMapById(mapId);
+      const skybox = targetMap.skybox?.id || 'deep_space';
       const isPrivate = document.getElementById('create-is-private')?.checked || false;
 
       await this.ensureConnected();
@@ -1127,6 +1139,7 @@ export class LobbyUI {
         maxPlayers,
         isPrivate,
         customData: {
+          mapId,
           skybox,
           gameMode: 'Dogfight',
         },
@@ -1226,7 +1239,9 @@ export class LobbyUI {
     if (this.stagingRoomName) this.stagingRoomName.textContent = room.name;
     if (this.stagingRoomCode) this.stagingRoomCode.textContent = room.code;
 
-    if (room.customData?.skybox && this.skyboxManager) {
+    if (room.customData?.mapId && this.mapManager) {
+      this.mapManager.loadMapById(room.customData.mapId).catch(() => {});
+    } else if (room.customData?.skybox && this.skyboxManager) {
       this.skyboxManager.loadSkybox(room.customData.skybox).catch(() => {});
     }
 
