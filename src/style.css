@@ -2546,6 +2546,13 @@ body.touch-device #touch-controls.visible {
   opacity: 1 !important;
 }
 
+.hud-top-bar,
+.hud-vitals-card,
+.hud-chat-card,
+.hud-scoreboard-backdrop {
+  display: none !important;
+}
+
 .hud-top-bar {
   position: absolute;
   top: 20px;
@@ -2742,277 +2749,88 @@ body.touch-device #touch-controls.visible {
   z-index: 15;
 }
 
-.inview-target-bracket {
+.minimal-enemy-marker {
   position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  transition: opacity 0.15s ease;
   user-select: none;
+  gap: 2px;
+  transition: opacity 0.15s ease;
 }
 
-.bracket-reticle {
-  position: relative;
-  width: 52px;
-  height: 52px;
-  border-radius: 4px;
-  transition: transform 0.12s ease, border-color 0.12s ease;
-}
-
-.corner-tick {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-color: rgba(255, 59, 48, 0.85);
-  border-style: solid;
-  transition: all 0.15s ease;
-}
-
-.tick-tl { top: 0; left: 0; border-width: 1.5px 0 0 1.5px; }
-.tick-tr { top: 0; right: 0; border-width: 1.5px 1.5px 0 0; }
-.tick-bl { bottom: 0; left: 0; border-width: 0 0 1.5px 1.5px; }
-.tick-br { bottom: 0; right: 0; border-width: 0 1.5px 1.5px 0; }
-
-.bracket-diamond {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  transform: translate(-50%, -50%) rotate(45deg);
-  border: 1px solid rgba(255, 59, 48, 0.7);
-  opacity: 0.7;
-}
-
-.bracket-meta {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  background: rgba(14, 10, 18, 0.85);
-  border: 1px solid rgba(255, 59, 48, 0.35);
-  padding: 3px 8px;
-  border-radius: 4px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.75), 0 0 8px rgba(255, 59, 48, 0.15);
-}
-
-.bracket-header {
+.marker-icon {
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  color: #ff3366;
+  filter: drop-shadow(0 0 6px rgba(255, 51, 102, 0.75));
+  transition: transform 0.1s ease, color 0.1s ease;
+}
+
+.marker-svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: rgba(255, 51, 102, 0.15);
+}
+
+.marker-dist {
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9);
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.hostile-tag {
-  font-size: 8px;
-  font-weight: 800;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.18);
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  border-radius: 2px;
-  padding: 1px 4px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+/* Locked state */
+.minimal-enemy-marker.is-locked .marker-icon {
+  transform: scale(1.25);
+  color: #ff1744;
+  filter: drop-shadow(0 0 10px #ff1744);
 }
 
-.bracket-callsign {
-  color: #f8fafc;
-  text-transform: uppercase;
+.minimal-enemy-marker.is-locked .marker-dist {
+  color: #ff1744;
+  text-shadow: 0 0 6px rgba(255, 23, 68, 0.85);
 }
 
-.bracket-dist {
-  color: #38bdf8;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-}
-
-.bracket-vitals {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 56px;
-}
-
-.mini-bar-track {
-  width: 100%;
-  height: 2.5px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.mini-bar-fill {
-  height: 100%;
-  transition: width 0.1s ease;
-}
-
-.shield-fill {
-  background: #38bdf8;
-  box-shadow: 0 0 4px rgba(56, 189, 248, 0.7);
-}
-
-.hull-fill {
-  background: #22c55e;
-  box-shadow: 0 0 4px rgba(34, 197, 94, 0.7);
-}
-
-.hull-fill.critical {
-  background: #ef4444;
-  box-shadow: 0 0 6px #ef4444;
-}
-
-.bracket-status-lock {
-  font-size: 8.5px;
-  font-weight: 900;
-  letter-spacing: 1.5px;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid #ef4444;
-  padding: 1px 6px;
-  border-radius: 3px;
-  animation: lockFlash 0.3s infinite alternate;
-}
-
-@keyframes lockFlash {
-  from { opacity: 0.8; }
-  to { opacity: 1; transform: scale(1.05); }
-}
-
-/* Dynamic Trajectory Vector from Target to Predictive Lead Pip */
-.bracket-lead-vector {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  height: 1.5px;
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.45), rgba(56, 189, 248, 0.9));
-  transform-origin: 0 50%;
-  pointer-events: none;
-  border-top: 1px dashed rgba(56, 189, 248, 0.8);
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
-  display: none;
-  z-index: 10;
-}
-
-/* Predictive Lead Pip Reticle */
-.lead-pip-container {
+/* Minimal Predictive Lead Aim Pip */
+.minimal-lead-pip {
   position: absolute;
   transform: translate(-50%, -50%);
   display: none;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 18;
   user-select: none;
-  transition: opacity 0.12s ease;
+  z-index: 18;
 }
 
-.lead-pip-reticle {
-  position: relative;
-  width: 26px;
-  height: 26px;
+.lead-pip-circle {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 1.5px dashed rgba(56, 189, 248, 0.85);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s cubic-bezier(0.1, 0.9, 0.2, 1);
+  border: 1.5px solid rgba(0, 240, 255, 0.85);
+  background: rgba(0, 240, 255, 0.25);
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.6);
+  transition: transform 0.1s ease, border-color 0.1s ease;
 }
 
-.lead-pip-ring {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid rgba(56, 189, 248, 0.4);
-}
-
-.lead-pip-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 6px #38bdf8;
-  transition: all 0.12s ease;
-}
-
-.lead-tick {
-  position: absolute;
-  background: rgba(56, 189, 248, 0.8);
-}
-.lead-tick.l-top { top: -4px; left: 50%; width: 1.5px; height: 3px; transform: translateX(-50%); }
-.lead-tick.l-bottom { bottom: -4px; left: 50%; width: 1.5px; height: 3px; transform: translateX(-50%); }
-.lead-tick.l-left { left: -4px; top: 50%; width: 3px; height: 1.5px; transform: translateY(-50%); }
-.lead-tick.l-right { right: -4px; top: 50%; width: 3px; height: 1.5px; transform: translateY(-50%); }
-
-.lead-pip-tag {
-  margin-top: 3px;
-  font-size: 8.5px;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  color: #38bdf8;
-  letter-spacing: 1px;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
-}
-
-/* Locked Lead Pip */
-.lead-pip-container.is-locked .lead-pip-reticle {
-  border: 2px solid #ef4444;
-  border-style: solid;
-  transform: scale(1.18);
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.95), inset 0 0 8px rgba(239, 68, 68, 0.45);
-}
-
-.lead-pip-container.is-locked .lead-pip-ring {
-  border-color: rgba(239, 68, 68, 0.7);
-}
-
-.lead-pip-container.is-locked .lead-pip-dot {
-  background: #ef4444;
-  box-shadow: 0 0 8px #ef4444;
-  transform: scale(1.4);
-}
-
-.lead-pip-container.is-locked .lead-tick {
-  background: #ef4444;
-}
-
-.lead-pip-container.is-locked .lead-pip-tag {
-  color: #ef4444;
-}
-
-/* Active Aim / Target Lock Highlight */
-.inview-target-bracket.is-locked .bracket-reticle {
-  transform: scale(0.90);
-}
-
-.inview-target-bracket.is-locked .corner-tick {
-  border-color: #ef4444;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.95);
-}
-
-.inview-target-bracket.is-locked .bracket-diamond {
-  background: #ef4444;
-  border-color: #ef4444;
-  opacity: 1;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 1);
-}
-
-.inview-target-bracket.is-locked .bracket-meta {
-  border-color: rgba(239, 68, 68, 0.75);
-  background: rgba(30, 8, 12, 0.92);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8), 0 0 10px rgba(239, 68, 68, 0.35);
-}
-
-.inview-target-bracket.is-locked .bracket-dist {
-  color: #ef4444;
+.minimal-lead-pip.is-locked .lead-pip-circle {
+  width: 9px;
+  height: 9px;
+  border-color: #ff1744;
+  background: rgba(255, 23, 68, 0.45);
+  box-shadow: 0 0 10px #ff1744;
+  transform: scale(1.25);
 }
 
 /* Off-Screen Indicator */
@@ -3026,68 +2844,45 @@ body.touch-device #touch-controls.visible {
   z-index: 16;
 }
 
-.clean-offscreen-arrow {
+.minimal-offscreen-arrow {
   position: absolute;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  gap: 2px;
   pointer-events: none;
+  user-select: none;
+  z-index: 20;
 }
 
-.arrow-shape {
+.offscreen-arrow-icon {
   font-size: 15px;
-  color: #ff3b30;
-  text-shadow: 0 0 8px rgba(255, 59, 48, 0.9);
+  color: #ff3366;
+  text-shadow: 0 0 8px rgba(255, 51, 102, 0.9);
   transition: transform 0.08s linear;
+  line-height: 1;
 }
 
-.arrow-text {
+.offscreen-arrow-dist {
+  font-family: var(--font-mono);
   font-size: 9.5px;
   font-weight: 700;
   color: #ffffff;
-  background: rgba(16, 12, 20, 0.88);
-  border: 1px solid rgba(255, 59, 48, 0.45);
-  padding: 2px 7px;
-  border-radius: 4px;
-  white-space: nowrap;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.75), 0 0 8px rgba(255, 59, 48, 0.15);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.95), 0 1px 2px rgba(0, 0, 0, 0.9);
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
-.clean-offscreen-arrow.is-danger .arrow-shape {
-  color: #ef4444;
-  text-shadow: 0 0 12px rgba(239, 68, 68, 1);
+.minimal-offscreen-arrow.is-danger .offscreen-arrow-icon {
+  color: #ff1744;
+  text-shadow: 0 0 12px #ff1744;
   animation: dangerPulse 0.5s infinite alternate;
 }
 
-.clean-offscreen-arrow.is-danger .arrow-text {
-  border-color: rgba(239, 68, 68, 0.7);
-  background: rgba(36, 10, 14, 0.92);
-  color: #fecaca;
-}
-
-.clean-offscreen-arrow.is-behind {
-  animation: behindPulse 0.6s infinite alternate;
-}
-
-.clean-offscreen-arrow.is-behind .arrow-shape {
-  color: #ff1744;
-  text-shadow: 0 0 16px #ff1744;
-}
-
-.clean-offscreen-arrow.is-behind .arrow-text {
-  border-color: #ff1744;
-  background: rgba(45, 8, 12, 0.95);
-  color: #ffffff;
-  font-weight: 800;
-}
-
-@keyframes behindPulse {
-  from { transform: translate(-50%, -50%) scale(1); filter: brightness(1); }
-  to { transform: translate(-50%, -50%) scale(1.15); filter: brightness(1.3); }
+.minimal-offscreen-arrow.is-danger .offscreen-arrow-dist {
+  color: #ff8099;
 }
 
 @keyframes dangerPulse {
@@ -3096,11 +2891,6 @@ body.touch-device #touch-controls.visible {
 }
 
 /* Vitals Card */
-body.touch-device .hud-vitals-card,
-body.touch-device .hud-radar-card {
-  display: none !important;
-}
-
 .hud-vitals-card {
   position: absolute;
   bottom: 24px;
@@ -3195,18 +2985,27 @@ body.touch-device .hud-radar-card {
   color: var(--text-muted);
 }
 
-/* Radar Sensor */
+/* Radar Sensor - Super Minimal & Transparent */
 .hud-radar-card {
   position: absolute;
   bottom: 24px;
   right: 24px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border-subtle);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border-radius: 50%;
-  padding: 4px;
-  pointer-events: auto;
+  padding: 0 !important;
+  pointer-events: none;
+  opacity: 0.8;
+  z-index: 50;
+}
+
+body.touch-device .hud-radar-card {
+  top: 18px;
+  right: 18px;
+  bottom: auto;
 }
 
 .radar-canvas {

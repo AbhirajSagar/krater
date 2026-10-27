@@ -61,149 +61,21 @@ export class CombatHUD {
     this.container = container;
 
     this.container.innerHTML = `
-      <!-- TOP STATUS BAR -->
-      <div class="hud-top-bar">
-        <div class="hud-badge-pill" id="hud-room-badge">
-          <span class="badge-code" id="hud-room-code">Match</span>
-        </div>
-        <div class="hud-badge-pill" id="hud-ping-badge">
-          <span class="ping-dot"></span>
-          <span id="hud-ping-val">0ms</span>
-        </div>
-        <button id="btn-hud-score" class="hud-action-pill" title="Scoreboard (Tab)">
-          ${Icons.trophy(14)}
-          <span>Score</span>
-        </button>
-        <button id="btn-hud-chat" class="hud-action-pill" title="Chat (Enter)">
-          ${Icons.message(14)}
-          <span>Chat</span>
-        </button>
-      </div>
-
-      <!-- TOP RIGHT: KILL FEED -->
-      <div class="hud-kill-feed" id="hud-kill-feed"></div>
-
-      <!-- CENTER TOP: NOTIFICATION BANNER -->
-      <div class="hud-combat-banner hidden" id="hud-combat-banner">
-        <span class="banner-text" id="hud-banner-text">Target Eliminated</span>
-      </div>
-
       <!-- HITMARKER OVERLAY -->
       <div class="hud-hitmarker hidden" id="hud-hitmarker">
         <div class="hit-slash hit-slash-1"></div>
         <div class="hit-slash hit-slash-2"></div>
       </div>
 
-      <!-- TARGET LOCK RETICLE -->
-      <div class="hud-target-lock hidden" id="hud-target-lock">
-        <div class="lock-bracket lock-tl"></div>
-        <div class="lock-bracket lock-tr"></div>
-        <div class="lock-bracket lock-bl"></div>
-        <div class="lock-bracket lock-br"></div>
-        <div class="lock-info">
-          <span class="lock-name" id="hud-lock-name">Target</span>
-          <span class="lock-dist" id="hud-lock-dist">120m</span>
-          <div class="lock-health-track">
-            <div class="lock-health-fill" id="hud-lock-health"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- IN-VIEW ENEMY TARGET BRACKETS & CALLSIGNS -->
+      <!-- IN-VIEW ENEMY TARGET MARKERS -->
       <div class="hud-world-targets" id="hud-world-targets"></div>
 
       <!-- OFF-SCREEN ENEMY DIRECTIONAL ARROWS -->
       <div class="hud-offscreen-indicators" id="hud-offscreen-indicators"></div>
 
-      <!-- BOTTOM LEFT: VITALS GAUGES -->
-      <div class="hud-vitals-card">
-        <div class="vitals-row">
-          <div class="vitals-header">
-            <span class="vitals-label">${Icons.shield(12)} Shield</span>
-            <span class="vitals-val" id="hud-shield-val">100%</span>
-          </div>
-          <div class="vitals-track">
-            <div class="vitals-bar shield-bar" id="hud-shield-bar" style="width: 100%;"></div>
-          </div>
-        </div>
-
-        <div class="vitals-row">
-          <div class="vitals-header">
-            <span class="vitals-label">${Icons.heart(12)} Hull</span>
-            <span class="vitals-val" id="hud-hull-val">100%</span>
-          </div>
-          <div class="vitals-track">
-            <div class="vitals-bar hull-bar" id="hud-hull-bar" style="width: 100%;"></div>
-          </div>
-        </div>
-
-        <div class="vitals-row">
-          <div class="vitals-header">
-            <span class="vitals-label">${Icons.zap(12)} Boost</span>
-            <span class="vitals-val" id="hud-boost-val">100%</span>
-          </div>
-          <div class="vitals-track">
-            <div class="vitals-bar boost-bar" id="hud-boost-bar" style="width: 100%;"></div>
-          </div>
-        </div>
-
-        <div class="hud-speed-row">
-          <span class="speed-number" id="hud-speed-val">0</span>
-          <span class="speed-unit-text">km/h</span>
-        </div>
-      </div>
-
-      <!-- BOTTOM RIGHT: MINIMAL RADAR SENSOR -->
-      <div class="hud-radar-card">
-        <canvas id="hud-radar-canvas" width="140" height="140" class="radar-canvas"></canvas>
-      </div>
-
-      <!-- IN-GAME CHAT OVERLAY -->
-      <div class="hud-chat-card hidden" id="hud-chat-box">
-        <div class="chat-header-row">
-          <span>Channel</span>
-          <button id="btn-close-chat" class="icon-btn-ghost-sm">${Icons.x(14)}</button>
-        </div>
-        <div class="chat-messages-scroll" id="hud-chat-messages"></div>
-        <div class="chat-quick-comms">
-          <button class="quick-comm-btn" data-msg="On your six">On your six</button>
-          <button class="quick-comm-btn" data-msg="Need backup">Need backup</button>
-          <button class="quick-comm-btn" data-msg="Good fight">Good fight</button>
-          <button class="quick-comm-btn" data-msg="Nice shot">Nice shot</button>
-        </div>
-        <form class="chat-input-row" id="hud-chat-form">
-          <input type="text" id="hud-chat-input" placeholder="Message squad..." maxlength="120" autocomplete="off" />
-          <button type="submit" class="btn-glass-sm">Send</button>
-        </form>
-      </div>
-
-      <!-- SCOREBOARD MODAL (TAB) -->
-      <div class="hud-scoreboard-backdrop hidden" id="hud-scoreboard-modal">
-        <div class="scoreboard-glass-card">
-          <div class="scoreboard-header-clean">
-            <div class="scoreboard-title-text">Leaderboard</div>
-            <div class="scoreboard-room-label" id="hud-scoreboard-room-name">Match</div>
-          </div>
-          <div class="scoreboard-table-scroll">
-            <table class="minimal-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Pilot</th>
-                  <th>Vessel</th>
-                  <th>Kills</th>
-                  <th>Deaths</th>
-                  <th>Score</th>
-                  <th>Ping</th>
-                </tr>
-              </thead>
-              <tbody id="hud-scoreboard-tbody"></tbody>
-            </table>
-          </div>
-          <div class="scoreboard-footer-clean">
-            <span>Press Tab or Escape to close</span>
-          </div>
-        </div>
+      <!-- SUPER MINIMAL TRANSPARENT MINIMAP -->
+      <div class="hud-radar-card" id="hud-radar-card">
+        <canvas id="hud-radar-canvas" width="110" height="110" class="radar-canvas"></canvas>
       </div>
 
       <!-- DESTRUCTION & RESPAWN OVERLAY -->
@@ -222,59 +94,18 @@ export class CombatHUD {
           </div>
         </div>
       </div>
-
-      <!-- RESULTS OVERLAY -->
-      <div class="hud-results-backdrop hidden" id="hud-results-overlay">
-        <div class="results-glass-card">
-          <div class="results-title-clean" id="hud-results-title">Match Concluded</div>
-          <div class="results-mvp-clean" id="hud-results-mvp">MVP: Pilot</div>
-          <div class="results-stats-body" id="hud-results-stats"></div>
-          <div class="results-actions-row">
-            <button id="btn-results-leave" class="btn-primary-solid">Return to Hangar</button>
-          </div>
-        </div>
-      </div>
     `;
 
     // Elements
-    this.shieldValEl = document.getElementById('hud-shield-val');
-    this.shieldBarEl = document.getElementById('hud-shield-bar');
-    this.hullValEl = document.getElementById('hud-hull-val');
-    this.hullBarEl = document.getElementById('hud-hull-bar');
-    this.boostValEl = document.getElementById('hud-boost-val');
-    this.boostBarEl = document.getElementById('hud-boost-bar');
-    this.speedValEl = document.getElementById('hud-speed-val');
-    this.pingValEl = document.getElementById('hud-ping-val');
-    this.roomCodeEl = document.getElementById('hud-room-code');
-
     this.hitmarkerEl = document.getElementById('hud-hitmarker');
-    this.combatBannerEl = document.getElementById('hud-combat-banner');
-    this.bannerTextEl = document.getElementById('hud-banner-text');
-
-    this.targetLockEl = document.getElementById('hud-target-lock');
-    this.lockNameEl = document.getElementById('hud-lock-name');
-    this.lockDistEl = document.getElementById('hud-lock-dist');
-    this.lockHealthEl = document.getElementById('hud-lock-health');
-
     this.inViewContainer = document.getElementById('hud-world-targets');
     this.targetBracketsMap = new Map();
     this.leadPipsMap = new Map();
     this.offscreenArrowsMap = new Map();
 
     this.offscreenContainer = document.getElementById('hud-offscreen-indicators');
-    this.killFeedEl = document.getElementById('hud-kill-feed');
-
     this.radarCanvas = document.getElementById('hud-radar-canvas');
-    this.radarCtx = this.radarCanvas.getContext('2d');
-
-    this.chatBoxEl = document.getElementById('hud-chat-box');
-    this.chatMessagesEl = document.getElementById('hud-chat-messages');
-    this.chatFormEl = document.getElementById('hud-chat-form');
-    this.chatInputEl = document.getElementById('hud-chat-input');
-
-    this.scoreboardModalEl = document.getElementById('hud-scoreboard-modal');
-    this.scoreboardTbodyEl = document.getElementById('hud-scoreboard-tbody');
-    this.scoreboardRoomEl = document.getElementById('hud-scoreboard-room-name');
+    this.radarCtx = this.radarCanvas ? this.radarCanvas.getContext('2d') : null;
 
     this.respawnOverlayEl = document.getElementById('hud-respawn-overlay');
     this.killerTextEl = document.getElementById('hud-killer-text');
@@ -282,45 +113,10 @@ export class CombatHUD {
     this.manualRespawnBtn = document.getElementById('btn-manual-respawn');
     this.respawnLeaveBtn = document.getElementById('btn-respawn-leave');
 
-    this.resultsOverlayEl = document.getElementById('hud-results-overlay');
-    this.resultsTitleEl = document.getElementById('hud-results-title');
-    this.resultsMvpEl = document.getElementById('hud-results-mvp');
-    this.resultsStatsEl = document.getElementById('hud-results-stats');
-    this.resultsLeaveBtn = document.getElementById('btn-results-leave');
-
-    this.btnScore = document.getElementById('btn-hud-score');
-    this.btnChat = document.getElementById('btn-hud-chat');
-    this.btnCloseChat = document.getElementById('btn-close-chat');
-
     this._hitmarkerTimer = null;
-    this._bannerTimer = null;
   }
 
   setupListeners() {
-    this.btnScore?.addEventListener('click', () => this.toggleScoreboard());
-    this.btnChat?.addEventListener('click', () => this.openChat());
-    this.btnCloseChat?.addEventListener('click', () => this.closeChat());
-
-    this.chatFormEl?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const text = this.chatInputEl?.value?.trim();
-      if (text && this.onSendChat) {
-        this.onSendChat(text);
-        this.chatInputEl.value = '';
-      }
-      this.closeChat();
-    });
-
-    this.container.querySelectorAll('.quick-comm-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const msg = btn.getAttribute('data-msg');
-        if (msg && this.onSendChat) {
-          this.onSendChat(msg);
-        }
-        this.closeChat();
-      });
-    });
-
     this.manualRespawnBtn?.addEventListener('click', () => {
       if (this.onRespawnRequest) {
         this.onRespawnRequest();
@@ -331,47 +127,6 @@ export class CombatHUD {
       this.hideDestroyedOverlay();
       if (this.onLeaveMatch) {
         this.onLeaveMatch();
-      }
-    });
-
-    this.resultsLeaveBtn?.addEventListener('click', () => {
-      if (this.onLeaveMatch) {
-        this.onLeaveMatch();
-      }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT' && e.target !== this.chatInputEl) return;
-
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        this.toggleScoreboard();
-        return;
-      }
-
-      if (e.code === 'Enter') {
-        if (!this.isChatOpen) {
-          e.preventDefault();
-          this.openChat();
-        }
-        return;
-      }
-
-      if (e.code === 'Escape') {
-        if (this.isChatOpen) {
-          this.closeChat();
-          return;
-        }
-        if (this.isScoreboardOpen) {
-          this.toggleScoreboard(false);
-          return;
-        }
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      if (e.code === 'Tab' && this.isScoreboardOpen) {
-        this.toggleScoreboard(false);
       }
     });
   }
@@ -614,7 +369,7 @@ export class CombatHUD {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const margin = Math.max(34, Math.min(w, h) * 0.05);
+    const margin = Math.max(30, Math.min(w, h) * 0.045);
     const halfW = (w / 2) - margin;
     const halfH = (h / 2) - margin;
     const cx = w / 2;
@@ -657,48 +412,29 @@ export class CombatHUD {
         const arrow = this.offscreenArrowsMap.get(p.id);
         if (arrow) arrow.el.style.display = 'none';
 
-        // --- IN-VIEW TARGET BRACKET ---
-        let bracket = this.targetBracketsMap.get(p.id);
-        if (!bracket) {
+        // --- BAREBONES IN-VIEW ENEMY MARKER (Icon + Distance) ---
+        let marker = this.targetBracketsMap.get(p.id);
+        if (!marker) {
           const el = document.createElement('div');
-          el.className = 'inview-target-bracket';
+          el.className = 'minimal-enemy-marker';
           el.innerHTML = `
-            <div class="bracket-lead-vector"></div>
-            <div class="bracket-reticle">
-              <span class="corner-tick tick-tl"></span>
-              <span class="corner-tick tick-tr"></span>
-              <span class="corner-tick tick-bl"></span>
-              <span class="corner-tick tick-br"></span>
-              <div class="bracket-diamond"></div>
+            <div class="marker-icon">
+              <svg viewBox="0 0 20 20" class="marker-svg">
+                <polygon points="10,2 18,10 10,18 2,10" />
+                <circle cx="10" cy="10" r="1.5" />
+              </svg>
             </div>
-            <div class="bracket-meta">
-              <div class="bracket-header">
-                <span class="hostile-tag">ENEMY</span>
-                <span class="bracket-callsign"></span>
-                <span class="bracket-dist"></span>
-              </div>
-              <div class="bracket-vitals">
-                <div class="mini-bar-track shield-track"><div class="mini-bar-fill shield-fill"></div></div>
-                <div class="mini-bar-track hull-track"><div class="mini-bar-fill hull-fill"></div></div>
-              </div>
-              <div class="bracket-status-lock hidden">LOCKED</div>
-            </div>
+            <div class="marker-dist"></div>
           `;
           this.inViewContainer.appendChild(el);
-          bracket = {
+          marker = {
             el,
-            leadLineEl: el.querySelector('.bracket-lead-vector'),
-            callsignEl: el.querySelector('.bracket-callsign'),
-            distEl: el.querySelector('.bracket-dist'),
-            shieldFill: el.querySelector('.shield-fill'),
-            hullFill: el.querySelector('.hull-fill'),
-            statusLockEl: el.querySelector('.bracket-status-lock'),
+            distEl: el.querySelector('.marker-dist'),
           };
-          this.targetBracketsMap.set(p.id, bracket);
+          this.targetBracketsMap.set(p.id, marker);
         }
 
-        // --- PREDICTIVE LEAD INDICATOR (LEAD PIP) ---
-        // Laser speed = 160.0 m/s
+        // --- PREDICTIVE LEAD AIM PIP ---
         const tLead = dist / 160.0;
         this._leadScratchVec.copy(p.root.position).addScaledVector(p.velocity, tLead);
         this._leadCamSpaceVec.copy(this._leadScratchVec).applyMatrix4(camera.matrixWorldInverse);
@@ -707,24 +443,10 @@ export class CombatHUD {
         let leadPip = this.leadPipsMap.get(p.id);
         if (!leadPip) {
           const el = document.createElement('div');
-          el.className = 'lead-pip-container';
-          el.innerHTML = `
-            <div class="lead-pip-reticle">
-              <div class="lead-pip-ring"></div>
-              <div class="lead-pip-dot"></div>
-              <span class="lead-tick l-top"></span>
-              <span class="lead-tick l-bottom"></span>
-              <span class="lead-tick l-left"></span>
-              <span class="lead-tick l-right"></span>
-            </div>
-            <div class="lead-pip-tag">LEAD</div>
-          `;
+          el.className = 'minimal-lead-pip';
+          el.innerHTML = `<div class="lead-pip-circle"></div>`;
           this.inViewContainer.appendChild(el);
-          leadPip = {
-            el,
-            reticleEl: el.querySelector('.lead-pip-reticle'),
-            tagEl: el.querySelector('.lead-pip-tag')
-          };
+          leadPip = { el };
           this.leadPipsMap.set(p.id, leadPip);
         }
 
@@ -741,84 +463,47 @@ export class CombatHUD {
           leadPip.el.style.top = `${leadSy.toFixed(1)}px`;
           leadPip.el.style.display = 'flex';
 
-          // Trajectory vector line connecting bracket center to lead pip
-          const dx = leadSx - sx;
-          const dy = leadSy - sy;
-          const lineDist = Math.hypot(dx, dy);
-          if (lineDist > 14) {
-            const lineAngle = Math.atan2(dy, dx);
-            bracket.leadLineEl.style.width = `${lineDist.toFixed(1)}px`;
-            bracket.leadLineEl.style.transform = `rotate(${lineAngle}rad)`;
-            bracket.leadLineEl.style.display = 'block';
-          } else {
-            bracket.leadLineEl.style.display = 'none';
-          }
-
-          // Check crosshair lock proximity to lead pip or enemy
           const leadDistToCenter = Math.hypot(leadSx - cx, leadSy - cy);
           const shipDistToCenter = Math.hypot(sx - cx, sy - cy);
-          isLocked = (leadDistToCenter < 42) || (shipDistToCenter < 38);
+          isLocked = (leadDistToCenter < 40) || (shipDistToCenter < 36);
 
-          if (isLocked) {
-            leadPip.el.classList.add('is-locked');
-          } else {
-            leadPip.el.classList.remove('is-locked');
-          }
+          leadPip.el.classList.toggle('is-locked', isLocked);
         } else {
           leadPip.el.style.display = 'none';
-          bracket.leadLineEl.style.display = 'none';
           const shipDistToCenter = Math.hypot(sx - cx, sy - cy);
-          isLocked = shipDistToCenter < 38;
+          isLocked = shipDistToCenter < 36;
         }
 
-        const sPct = Math.max(0, Math.min(100, Math.round((p.shield / (p.maxShield || 100)) * 100)));
-        const hPct = Math.max(0, Math.min(100, Math.round((p.health / (p.maxHealth || 100)) * 100)));
+        marker.distEl.textContent = `${dist}m`;
+        marker.el.classList.toggle('is-locked', isLocked);
 
-        bracket.callsignEl.textContent = p.name;
-        bracket.distEl.textContent = `${dist}m`;
-        bracket.shieldFill.style.width = `${sPct}%`;
-        bracket.hullFill.style.width = `${hPct}%`;
-        if (hPct <= 25) {
-          bracket.hullFill.classList.add('critical');
-        } else {
-          bracket.hullFill.classList.remove('critical');
-        }
-
-        if (isLocked) {
-          bracket.el.classList.add('is-locked');
-          if (bracket.statusLockEl) bracket.statusLockEl.classList.remove('hidden');
-        } else {
-          bracket.el.classList.remove('is-locked');
-          if (bracket.statusLockEl) bracket.statusLockEl.classList.add('hidden');
-        }
-
-        const scale = THREE.MathUtils.clamp(1.15 - (dist / 700) * 0.40, 0.72, 1.25);
-        bracket.el.style.left = `${sx.toFixed(1)}px`;
-        bracket.el.style.top = `${sy.toFixed(1)}px`;
-        bracket.el.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(2)})`;
-        bracket.el.style.display = 'flex';
+        const scale = THREE.MathUtils.clamp(1.15 - (dist / 800) * 0.35, 0.75, 1.25);
+        marker.el.style.left = `${sx.toFixed(1)}px`;
+        marker.el.style.top = `${sy.toFixed(1)}px`;
+        marker.el.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(2)})`;
+        marker.el.style.display = 'flex';
 
       } else {
-        // Hide in-view bracket and lead pip
-        const bracket = this.targetBracketsMap.get(p.id);
-        if (bracket) bracket.el.style.display = 'none';
+        // Hide in-view marker and lead pip
+        const marker = this.targetBracketsMap.get(p.id);
+        if (marker) marker.el.style.display = 'none';
         const leadPip = this.leadPipsMap.get(p.id);
         if (leadPip) leadPip.el.style.display = 'none';
 
-        // Show off-screen directional indicator
+        // --- BAREBONES OFF-SCREEN ARROW (Icon + Distance) ---
         let arrow = this.offscreenArrowsMap.get(p.id);
         if (!arrow) {
           const el = document.createElement('div');
-          el.className = 'clean-offscreen-arrow';
+          el.className = 'minimal-offscreen-arrow';
           el.innerHTML = `
-            <div class="arrow-shape">▲</div>
-            <div class="arrow-text"></div>
+            <div class="offscreen-arrow-icon">▲</div>
+            <div class="offscreen-arrow-dist"></div>
           `;
           this.offscreenContainer.appendChild(el);
           arrow = {
             el,
-            shapeEl: el.querySelector('.arrow-shape'),
-            textEl: el.querySelector('.arrow-text')
+            iconEl: el.querySelector('.offscreen-arrow-icon'),
+            distEl: el.querySelector('.offscreen-arrow-dist')
           };
           this.offscreenArrowsMap.set(p.id, arrow);
         }
@@ -827,11 +512,9 @@ export class CombatHUD {
         let dirX = camX;
         let dirY = -camY;
         const isBehind = camZ >= -0.1;
-        if (isBehind) {
-          if (Math.hypot(dirX, dirY) < 0.05) {
-            dirX = 0;
-            dirY = 1;
-          }
+        if (isBehind && Math.hypot(dirX, dirY) < 0.05) {
+          dirX = 0;
+          dirY = 1;
         }
         const len = Math.hypot(dirX, dirY);
         if (len > 0.0001) {
@@ -852,24 +535,11 @@ export class CombatHUD {
         const edgeY = THREE.MathUtils.clamp(cy + dirY * edgeScale, margin, h - margin);
         const rotDeg = (angle * 180 / Math.PI) + 90;
 
-        arrow.shapeEl.style.transform = `rotate(${rotDeg.toFixed(1)}deg)`;
+        arrow.iconEl.style.transform = `rotate(${rotDeg.toFixed(1)}deg)`;
+        arrow.distEl.textContent = `${dist}m`;
         arrow.el.style.left = `${edgeX.toFixed(1)}px`;
         arrow.el.style.top = `${edgeY.toFixed(1)}px`;
-
-        if (isBehind && dist < 220) {
-          arrow.el.classList.add('is-behind');
-          arrow.el.classList.add('is-danger');
-          arrow.textEl.textContent = `⚠️ BEHIND · ${dist}m`;
-        } else if (dist < 150) {
-          arrow.el.classList.remove('is-behind');
-          arrow.el.classList.add('is-danger');
-          arrow.textEl.textContent = `HOSTILE · ${dist}m`;
-        } else {
-          arrow.el.classList.remove('is-behind');
-          arrow.el.classList.remove('is-danger');
-          arrow.textEl.textContent = `${p.name} · ${dist}m`;
-        }
-
+        arrow.el.classList.toggle('is-danger', dist < 160);
         arrow.el.style.display = 'flex';
       }
     }
@@ -902,62 +572,38 @@ export class CombatHUD {
     const h = this.radarCanvas.height;
     const cx = w / 2;
     const cy = h / 2;
-    const radarRange = 400;
-    const scale = (cx - 8) / radarRange;
+    const radarRange = 350;
+    const scale = (cx - 6) / radarRange;
 
     ctx.clearRect(0, 0, w, h);
 
-    // Dark translucent circle
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    // Super minimal and transparent circular radar boundary
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
     ctx.beginPath();
     ctx.arc(cx, cy, cx - 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Subtle border
+    // Delicate transparent border
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Crosshairs
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    // Subtle faint crosshair ticks
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.beginPath();
-    ctx.moveTo(cx, 4);
-    ctx.lineTo(cx, h - 4);
-    ctx.moveTo(4, cy);
-    ctx.lineTo(w - 4, cy);
+    ctx.moveTo(cx, 6);
+    ctx.lineTo(cx, h - 6);
+    ctx.moveTo(6, cy);
+    ctx.lineTo(w - 6, cy);
     ctx.stroke();
 
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(localShipQuat);
     const shipYaw = Math.atan2(forward.x, -forward.z);
 
-    // Draw Asteroids (dim dots)
-    if (asteroidField && asteroidField.asteroids) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      for (let i = 0; i < Math.min(asteroidField.asteroids.length, 50); i++) {
-        const a = asteroidField.asteroids[i];
-        if (a.isDestroyed || !a.mesh.visible) continue;
-
-        const dx = a.mesh.position.x - localShipPos.x;
-        const dz = a.mesh.position.z - localShipPos.z;
-
-        const rx = dx * Math.cos(shipYaw) - dz * Math.sin(shipYaw);
-        const rz = dx * Math.sin(shipYaw) + dz * Math.cos(shipYaw);
-
-        const px = cx + rx * scale;
-        const py = cy + rz * scale;
-
-        if (Math.hypot(px - cx, py - cy) < cx - 6) {
-          ctx.beginPath();
-          ctx.arc(px, py, 1.4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    }
-
-    // Draw Remote Players (clean white dots)
+    // Draw Remote Enemy Players (crisp red dots)
     if (remotePlayersManager) {
       const players = remotePlayersManager.getAllPlayers();
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#ff3366';
       for (const p of players) {
         if (p.isDestroyed || !p.root.visible) continue;
 
@@ -970,21 +616,21 @@ export class CombatHUD {
         const px = cx + rx * scale;
         const py = cy + rz * scale;
 
-        if (Math.hypot(px - cx, py - cy) < cx - 6) {
+        if (Math.hypot(px - cx, py - cy) < cx - 4) {
           ctx.beginPath();
-          ctx.arc(px, py, 2.8, 0, Math.PI * 2);
+          ctx.arc(px, py, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
       }
     }
 
-    // Local Player (center triangle)
+    // Local Player (crisp tiny white arrow)
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(cx, cy - 5);
-    ctx.lineTo(cx + 3.5, cy + 4);
-    ctx.lineTo(cx, cy + 2);
-    ctx.lineTo(cx - 3.5, cy + 4);
+    ctx.moveTo(cx, cy - 4.5);
+    ctx.lineTo(cx + 3, cy + 3.5);
+    ctx.lineTo(cx, cy + 1.8);
+    ctx.lineTo(cx - 3, cy + 3.5);
     ctx.closePath();
     ctx.fill();
   }
