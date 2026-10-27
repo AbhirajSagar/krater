@@ -11,12 +11,13 @@ import { OptionsMenu } from './OptionsMenu.js';
 import { GameplayRecorder } from './GameplayRecorder.js';
 import { DevStatsHUD } from './DevStatsHUD.js';
 
-// Multiplayer Modules
+// Multiplayer & Combat Modules
 import { MultiplayerClient } from './MultiplayerClient.js';
 import { RemotePlayerManager } from './RemotePlayerManager.js';
 import { CombatHUD } from './CombatHUD.js';
 import { LobbyUI } from './LobbyUI.js';
 import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
+import { EnemyManager, EnemySpawner, enemyFactory, BUILTIN_ARCHETYPES } from './enemies/index.js';
 
 // 1. Initialize Loading Screen
 const loadingScreen = new LoadingScreen();
@@ -107,6 +108,8 @@ let skyboxManager = null;
 let mapManager = null;
 let client = null;
 let remotePlayersManager = null;
+let enemyManager = null;
+let enemySpawner = null;
 let combatHUD = null;
 let lobbyUI = null;
 
@@ -292,6 +295,8 @@ function enterMainMenu(advanceSkybox = false) {
   if (minimalAmmoHUD) minimalAmmoHUD.classList.remove('visible');
   if (touchControls) touchControls.resetAll();
   if (remotePlayersManager) remotePlayersManager.clear();
+  if (enemyManager) enemyManager.clear();
+  if (enemySpawner) enemySpawner.dispose();
   if (asteroidField && mapManager?.currentMap?.asteroids?.enabled !== false) {
     asteroidField.reseed('spacegame_menu_sector', mapManager?.currentMap?.asteroids || {});
   }
@@ -377,6 +382,13 @@ function startBattle(room = null, isSolo = false) {
       }
     }
 
+    if (enemyManager) {
+      enemyManager.clear();
+    }
+    if (enemySpawner) {
+      enemySpawner.setMode('multiplayer', client.room?.hostId === client.playerId);
+    }
+
     if (lobbyUI) {
       client.updatePlayerState({
         shield: 100,
@@ -400,17 +412,27 @@ function startBattle(room = null, isSolo = false) {
     }
     if (remotePlayersManager) {
       remotePlayersManager.clear();
-      remotePlayersManager.addPlayer({
+    }
+    if (enemyManager) {
+      enemyManager.clear();
+    }
+    if (enemySpawner) {
+      enemySpawner.setMode('singleplayer', true);
+      // Spawn training target drone
+      enemySpawner.spawnAt('drone', [0, 4, -85], {
         id: 'solo_target_drone',
         name: 'ROGUE DRONE',
-        state: {
-          shipIndex: 1,
-          themeKey: 'Red',
-          position: [0, 4, -85],
-          health: 100,
-          shield: 100,
-          isDestroyed: false
-        }
+        themeKey: 'Red'
+      });
+      // Start dynamic auto-replenish spawner
+      enemySpawner.startAutoSpawn({
+        maxEnemies: 3,
+        interval: 5.0,
+        archetypes: ['drone', 'scout', 'fighter'],
+        minDist: 65,
+        maxDist: 110,
+        autoRespawn: true,
+        respawnDelay: 3.5
       });
     }
   }
@@ -460,27 +482,22 @@ function animate() {
     sunLight.target.updateMatrixWorld();
   }
 
+  // Update Modular AI Enemies & Laser Combat
+  if (enemyManager) {
+    enemyManager.update(dt, camera, spaceship);
+  }
+
+  // Update Dynamic Enemy Spawner & Waves
+  if (enemySpawner && currentGameState === 'BATTLE') {
+    enemySpawner.update(dt, {
+      playerPosition: spaceship ? spaceship.root.position : null,
+      playerVelocity: spaceship ? spaceship.velocity : null,
+      camera
+    });
+  }
+
   // Update Remote Opponents & check incoming laser hits
   if (remotePlayersManager) {
-    if (currentGameState === 'BATTLE' && (!client || !client.room)) {
-      const drone = remotePlayersManager.getPlayer('solo_target_drone');
-      if (drone && !drone.isDestroyed) {
-        soloDroneTime += dt;
-        const rad = 75;
-        const ang = soloDroneTime * 0.25;
-        const tx = Math.cos(ang) * rad;
-        const ty = Math.sin(soloDroneTime * 0.45) * 16;
-        const tz = Math.sin(ang) * rad;
-        const vx = -Math.sin(ang) * rad * 0.25;
-        const vy = Math.cos(soloDroneTime * 0.45) * 16 * 0.45;
-        const vz = Math.cos(ang) * rad * 0.25;
-        drone.targetPosition.set(tx, ty, tz);
-        drone.velocity.set(vx, vy, vz);
-        drone.targetSpeed = Math.hypot(vx, vy, vz);
-        const fwd = new THREE.Vector3(vx, vy, vz).normalize();
-        drone.targetQuaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), fwd);
-      }
-    }
     remotePlayersManager.update(dt, camera, spaceship);
   }
 
@@ -500,7 +517,7 @@ function animate() {
         camera,
         spaceship.root.position,
         spaceship.root.quaternion,
-        remotePlayersManager,
+        enemyManager || remotePlayersManager,
         asteroidField
       );
     }
@@ -519,6 +536,14 @@ function animate() {
         shipIndex: lobbyUI ? lobbyUI.selectedShipIndex : 0,
         themeKey: lobbyUI ? lobbyUI.selectedThemeKey : 'Cyan'
       });
+
+      // If host, broadcast AI enemy transforms to sync remote clients
+      if (client.room.hostId === client.playerId && enemyManager) {
+        const enemyPackets = enemyManager.serializeAllTransforms();
+        if (enemyPackets.length > 0) {
+          client.relay('ENEMY_TRANSFORMS', enemyPackets);
+        }
+      }
     }
   } else if (currentGameState === 'MENU') {
     if (spaceship) {
@@ -739,6 +764,36 @@ function bindNetworkEvents() {
     if (lobbyUI) lobbyUI.addLobbyChatMessage(data.sender, data.text);
   });
 
+  // Modular Enemy Network Relays (Multiplayer Support)
+  client.on('relay:SPAWN_ENEMY', (data) => {
+    if (enemySpawner) enemySpawner.handleNetworkSpawn(data);
+  });
+
+  client.on('relay:ENEMY_TRANSFORMS', (packets) => {
+    if (enemyManager && Array.isArray(packets)) {
+      for (const pkt of packets) {
+        if (pkt && pkt.id) enemyManager.handleEnemyTransform(pkt.id, pkt);
+      }
+    }
+  });
+
+  client.on('relay:ENEMY_DAMAGED', (data) => {
+    if (enemyManager) enemyManager.handleEnemyDamaged(data.enemyId, data.shield, data.health);
+  });
+
+  client.on('relay:ENEMY_KILLED', (data) => {
+    if (enemyManager) enemyManager.handleEnemyKilled(data.enemyId, data.killerId);
+  });
+
+  client.on('relay:WAVE_STARTED', (data) => {
+    if (combatHUD) combatHUD.showCombatBanner(`INCOMING: ${data.waveName || data.waveId}`.toUpperCase());
+  });
+
+  client.on('relay:WAVE_COMPLETED', (data) => {
+    if (combatHUD) combatHUD.showCombatBanner('WAVE ELIMINATED - SECTOR CLEAR (+500)');
+    localScore += 500;
+  });
+
   // Local Spaceship Combat Callbacks
   if (spaceship) {
     spaceship.onLaserFired = (laserData) => {
@@ -750,55 +805,64 @@ function bindNetworkEvents() {
     spaceship.onLaserHitEnemy = (enemyPlayer, hitPoint, damage) => {
       if (combatHUD) combatHUD.triggerHitmarker();
 
-      // Immediate visual shield flash and damage on remote ship
       if (enemyPlayer) {
-        enemyPlayer.flashShield();
-        const currentShield = enemyPlayer.shield || 0;
-        const currentHealth = enemyPlayer.health || 100;
-        let newShield = currentShield;
-        let newHealth = currentHealth;
-        if (currentShield > 0) {
-          if (damage <= currentShield) {
-            newShield -= damage;
-          } else {
-            const leftover = damage - currentShield;
-            newShield = 0;
-            newHealth = Math.max(0, currentHealth - leftover);
-          }
-        } else {
-          newHealth = Math.max(0, currentHealth - damage);
-        }
-        enemyPlayer.setVitals(newHealth, newShield);
-
-        if (newHealth <= 0 && !enemyPlayer.isDestroyed) {
-          if (remotePlayersManager) {
-            remotePlayersManager.handlePlayerKilled(enemyPlayer.id);
-          }
-          if (enemyPlayer.id === 'solo_target_drone') {
+        // If target is an EnemyEntity / AIEnemy
+        if (typeof enemyPlayer.takeDamage === 'function') {
+          const result = enemyPlayer.takeDamage(damage, client?.playerId || 'local_pilot', hitPoint);
+          if (result.isDestroyed) {
             localKills += 1;
-            localScore += 100;
+            const scoreGain = enemyPlayer.scoreValue || 100;
+            localScore += scoreGain;
             if (combatHUD) {
               combatHUD.addKillFeedEntry(lobbyUI ? lobbyUI.callsign : 'Pilot', enemyPlayer.name, true, false);
-              combatHUD.showCombatBanner('ROGUE DRONE ELIMINATED (+100)');
+              combatHUD.showCombatBanner(`${enemyPlayer.name} ELIMINATED (+${scoreGain})`);
             }
-            setTimeout(() => {
-              if (currentGameState === 'BATTLE' && (!client || !client.room) && remotePlayersManager) {
-                const ang = Math.random() * Math.PI * 2;
-                const r = 70 + Math.random() * 20;
-                remotePlayersManager.handlePlayerRespawned(enemyPlayer.id, [Math.cos(ang) * r, 4, Math.sin(ang) * r]);
-              }
-            }, 3500);
+          }
+        } else {
+          // Fallback for RemotePlayer
+          enemyPlayer.flashShield();
+          const currentShield = enemyPlayer.shield || 0;
+          const currentHealth = enemyPlayer.health || 100;
+          let newShield = currentShield;
+          let newHealth = currentHealth;
+          if (currentShield > 0) {
+            if (damage <= currentShield) {
+              newShield -= damage;
+            } else {
+              const leftover = damage - currentShield;
+              newShield = 0;
+              newHealth = Math.max(0, currentHealth - leftover);
+            }
+          } else {
+            newHealth = Math.max(0, currentHealth - damage);
+          }
+          enemyPlayer.setVitals(newHealth, newShield);
+
+          if (newHealth <= 0 && !enemyPlayer.isDestroyed) {
+            if (remotePlayersManager) {
+              remotePlayersManager.handlePlayerKilled(enemyPlayer.id);
+            }
           }
         }
       }
 
-      if (currentGameState === 'BATTLE' && client.isConnected && client.room) {
-        client.relay('PLAYER_HIT', {
-          victimId: enemyPlayer.id,
-          attackerId: client.playerId,
-          damage,
-          hitPoint: hitPoint.toArray()
-        }, 'others');
+      if (currentGameState === 'BATTLE' && client.isConnected && client.room && enemyPlayer) {
+        if (remotePlayersManager && remotePlayersManager.getPlayer(enemyPlayer.id)) {
+          client.relay('PLAYER_HIT', {
+            victimId: enemyPlayer.id,
+            attackerId: client.playerId,
+            damage,
+            hitPoint: hitPoint ? hitPoint.toArray() : null
+          }, 'others');
+        } else if (enemyManager && enemyManager.getEnemy(enemyPlayer.id)) {
+          client.relay('ENEMY_DAMAGED', {
+            attackerId: client.playerId,
+            enemyId: enemyPlayer.id,
+            shield: enemyPlayer.shield,
+            health: enemyPlayer.health,
+            isDestroyed: enemyPlayer.isDestroyed
+          });
+        }
       }
     };
 
@@ -951,10 +1015,32 @@ async function initPipeline() {
     updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
   }
 
-  // Phase 5: Multiplayer Client & Remote Opponents
+  // Phase 5: Multiplayer Client, Remote Opponents & Modular Enemy System
   client = new MultiplayerClient();
   remotePlayersManager = new RemotePlayerManager(scene, asteroidField);
-  spaceship.setRemotePlayersManager(remotePlayersManager);
+  enemyManager = new EnemyManager(scene, asteroidField);
+  enemyManager.setRemotePlayerManager(remotePlayersManager);
+
+  enemySpawner = new EnemySpawner(enemyManager, {
+    mode: 'singleplayer',
+    isHost: true,
+    networkRelay: (type, payload) => {
+      if (client && client.isConnected && client.room) {
+        client.relay(type, payload);
+      }
+    }
+  });
+
+  // Spaceship lock-on and laser hits route through enemyManager (which composites remote players)
+  spaceship.setRemotePlayersManager(enemyManager);
+
+  // Expose modular enemy architecture for developer exploration & console testing
+  window.enemySystem = {
+    enemyManager,
+    enemySpawner,
+    enemyFactory,
+    BUILTIN_ARCHETYPES
+  };
 
   // Phase 6: Combat HUD & Lobby UI
   combatHUD = new CombatHUD({
