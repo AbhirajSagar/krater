@@ -1,8 +1,8 @@
 /**
  * LobbyUI.js
- * Minimalist, monochromatic glassmorphic UI for StarSparrow.
- * Features a static 3D ship preview on the left and a clean, organized panel on the right.
- * No top-left title, pure neutral styling, and monochromatic Lucide icons.
+ * High-octane sci-fi UI for StarSparrow / Kraters.
+ * Remade layout: 3D Spaceship showcase on the LEFT, clean progressive Step/Submenu options on the RIGHT.
+ * Supported across mobile landscape, tablets, laptops, and ultra-wide desktops.
  */
 
 import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
@@ -49,6 +49,7 @@ export class LobbyUI {
     this.selectedThemeKey = localStorage.getItem('spacegame_theme_key') || 'Cyan';
 
     this.currentScreen = 'main'; // 'main', 'lobby'
+    this.currentStep = 'main';   // 'main', 'play', 'solo-map', 'multiplayer', 'hangar', 'pilot', 'controls', 'settings', 'credits'
     this.isHost = false;
     this.isReady = false;
     this.isLoading = false;
@@ -78,290 +79,394 @@ export class LobbyUI {
       || getMapById(this.mapManager?.getStoredMapId?.())
       || getDefaultMap();
     const activeMapId = activeMap.id;
-    const activeMapName = activeMap.name;
 
     this.root.innerHTML = `
-      <!-- ================= MAIN MENU SCREEN (Ship Selector on Left, Menu Options on Right) ================= -->
+      <!-- ================= MAIN MENU SCREEN (Spaceship on Left, Menu Steps on Right) ================= -->
       <div class="lobby-screen screen-main screen-split-layout" id="screen-main">
 
-        <!-- ================= LEFT SIDE: SHIP SELECTOR ================= -->
-        <aside class="menu-left-panel" id="panel-hangar">
-          <div class="arcade-card hangar-arcade-card">
-            <div class="panel-header-badge-row">
-              <span class="arcade-badge">HANGAR</span>
-              <span class="ship-counter-badge" id="ship-counter-badge">01 / 40</span>
+        <!-- ================= LEFT SIDE: OPEN 3D SHIP VIEWPORT & TELEMETRY ================= -->
+        <div class="menu-left-viewport" id="ship-viewport-space">
+          <!-- Sleek Tactical Vessel Watermark Overlay -->
+          <div class="vessel-watermark-overlay" id="vessel-watermark">
+            <div class="watermark-badge-row">
+              <span class="watermark-badge">VESSEL IN HANGAR</span>
+              <span class="watermark-counter" id="watermark-ship-counter">01 / ${SPACESHIP_CONFIGS.length}</span>
             </div>
-
-            <!-- Vessel Selection Stepper -->
-            <div class="ship-selector-hero">
-              <button id="btn-prev-ship" class="arcade-stepper-btn" aria-label="Previous Ship">
-                ${Icons.chevronLeft(20)}
-              </button>
-              <div class="ship-hero-info">
-                <h2 class="ship-title-text" id="ship-name-val">StarSparrow 1</h2>
-              </div>
-              <button id="btn-next-ship" class="arcade-stepper-btn" aria-label="Next Ship">
-                ${Icons.chevronRight(20)}
-              </button>
+            <div class="watermark-ship-name" id="watermark-ship-name">StarSparrow 1</div>
+            <div class="watermark-stats-line">
+              <span class="wm-stat"><span class="wm-stat-lbl">SPD</span> <span class="wm-stat-val" id="watermark-spd-val">55</span></span>
+              <span class="wm-divider">/</span>
+              <span class="wm-stat"><span class="wm-stat-lbl">BST</span> <span class="wm-stat-val" id="watermark-bst-val">121</span></span>
+              <span class="wm-divider">/</span>
+              <span class="wm-stat"><span class="wm-stat-lbl">AGL</span> <span class="wm-stat-val" id="watermark-agl-val">88%</span></span>
             </div>
-
-            <!-- Tactical Specifications -->
-            <div class="ship-specs-container">
-              <div class="spec-row">
-                <div class="spec-header">
-                  <span class="spec-label">SPEED</span>
-                  <span class="spec-val" id="spec-speed-val">55</span>
-                </div>
-                <div class="spec-track">
-                  <div class="spec-fill" id="spec-speed-fill" style="width: 70%;"></div>
-                </div>
-              </div>
-
-              <div class="spec-row">
-                <div class="spec-header">
-                  <span class="spec-label">BOOST</span>
-                  <span class="spec-val" id="spec-boost-val">121</span>
-                </div>
-                <div class="spec-track">
-                  <div class="spec-fill spec-fill-boost" id="spec-boost-fill" style="width: 80%;"></div>
-                </div>
-              </div>
-
-              <div class="spec-row">
-                <div class="spec-header">
-                  <span class="spec-label">AGILITY</span>
-                  <span class="spec-val" id="spec-agility-val">88%</span>
-                </div>
-                <div class="spec-track">
-                  <div class="spec-fill spec-fill-agility" id="spec-agility-fill" style="width: 88%;"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Paint Scheme Swatches -->
-            <div class="panel-section">
-              <span class="panel-section-label">PAINT</span>
-              <div class="color-swatches-grid" id="color-swatches-grid">
-                ${COLOR_SWATCHES.map(sw => `
-                  <button class="color-swatch-circle ${sw.key === this.selectedThemeKey ? 'active' : ''}"
-                          data-key="${sw.key}"
-                          title="${sw.name}"
-                          style="background-color: ${sw.hex};"
-                          aria-label="${sw.name}">
-                  </button>
-                `).join('')}
-              </div>
+            <div class="watermark-hint">
+              ${Icons.refresh(13)}
+              <span>DRAG TO INSPECT 360°</span>
             </div>
           </div>
-        </aside>
+        </div>
 
-        <!-- ================= CENTER: OPEN 3D SHIP VIEWPORT ================= -->
-        <div class="ship-viewport-space" id="ship-viewport-space" aria-hidden="true"></div>
-
-        <!-- ================= RIGHT SIDE: MAIN NAVIGATION MENU ================= -->
+        <!-- ================= RIGHT SIDE: MENU OPTIONS (STEP / SUBMENU SYSTEM) ================= -->
         <aside class="menu-right-panel" id="panel-menu">
-          <div class="arcade-card main-nav-card">
-            <!-- Pilot Profile Header & Connection Status -->
-            <div class="pilot-profile-card">
-              <div class="pilot-meta-group">
-                <div class="pilot-label-row">
-                  <span class="pilot-card-title">PILOT</span>
-                  <div class="nav-status" id="nav-status">
+          <div class="arcade-card main-nav-card" id="menu-nav-card">
+
+            <!-- ================= STEP 1: ROOT TITLE & MAIN MENU ================= -->
+            <div class="menu-step-container active" id="step-main">
+              <!-- Game Title Header Block -->
+              <div class="menu-title-block">
+                <h1 class="title-logo-text">KRATERS</h1>
+                <div class="title-meta-bar">
+                  <div class="meta-status-pill" id="nav-status">
                     <span class="status-indicator-dot"></span>
                     <span class="status-indicator-text" id="nav-status-text">Connected</span>
                   </div>
+                  <div class="meta-pilot-input-wrap" title="Edit Pilot Callsign">
+                    <span class="pilot-tag-label">PILOT</span>
+                    <input type="text" id="input-callsign" class="pilot-tag-input" maxlength="16" spellcheck="false" autocomplete="off" value="${escapeHTML(this.callsign)}" placeholder="Callsign" />
+                    <button id="btn-random-callsign" class="icon-btn-ghost btn-random-pilot" title="Random Callsign" aria-label="Random Callsign" type="button">
+                      ${Icons.shuffle(13)}
+                    </button>
+                  </div>
                 </div>
-                <div class="minimal-input-wrap">
-                  <input type="text" id="input-callsign" maxlength="16" spellcheck="false" autocomplete="off" value="${this.callsign}" placeholder="Enter callsign" />
-                  <button id="btn-random-callsign" class="icon-btn-ghost" title="Random Callsign" aria-label="Random Callsign">
-                    ${Icons.shuffle(15)}
-                  </button>
-                </div>
+              </div>
+
+              <!-- Primary Action Stack -->
+              <div class="nav-options-stack">
+                <!-- 1. Play Mission (Primary Radiant CTA) -->
+                <button id="btn-goto-play" class="arcade-btn arcade-btn-sp" type="button">
+                  <span class="arcade-btn-icon">${Icons.play(18)}</span>
+                  <span class="arcade-btn-label">PLAY MISSION</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
+                </button>
+
+                <!-- 2. Fleet Hangar (Ship Customization) -->
+                <button id="btn-goto-hangar" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.rocket(18)}</span>
+                  <span class="arcade-btn-label">FLEET HANGAR</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+                </button>
+
+                <!-- 4. Flight Controls -->
+                <button id="btn-goto-controls" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.gamepad(18)}</span>
+                  <span class="arcade-btn-label">FLIGHT CONTROLS</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+                </button>
+
+                <!-- 5. Settings -->
+                <button id="btn-goto-settings" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.settings(18)}</span>
+                  <span class="arcade-btn-label">SETTINGS</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+                </button>
+
+                <!-- 6. Credits -->
+                <button id="btn-goto-credits" class="arcade-btn arcade-btn-sub" type="button">
+                  <span class="arcade-btn-icon">${Icons.info(18)}</span>
+                  <span class="arcade-btn-label">CREDITS</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
+                </button>
               </div>
             </div>
 
-            <!-- Arena Map Selection Section -->
-            <div class="menu-skybox-section menu-map-section">
-              <div class="menu-skybox-header menu-map-header">
-                <span class="menu-skybox-title menu-map-title">ARENA MAP</span>
-                <span class="menu-skybox-badge menu-map-badge" id="menu-map-badge">${activeMapName}</span>
-              </div>
-              <div class="menu-skybox-grid menu-map-grid" id="menu-map-grid">
-                ${MAPS_CONFIG.map(m => `
-                  <button class="menu-skybox-btn menu-map-btn ${m.id === activeMapId ? 'active' : ''}" 
-                          data-map-id="${m.id}" 
-                          type="button" 
-                          title="${m.description}">
-                    <span class="menu-skybox-dot menu-map-dot" style="background: ${m.color}; box-shadow: 0 0 8px ${m.glow};"></span>
-                    <span class="menu-skybox-label menu-map-label">${m.shortName}</span>
-                  </button>
-                `).join('')}
-              </div>
-            </div>
-
-            <!-- Main Navigation Options Stack (Clean, bold arcade buttons - NO verbose literature) -->
-            <div class="nav-options-stack" id="nav-options-main">
-              <!-- 1. Singleplayer -->
-              <button id="btn-nav-singleplayer" class="arcade-btn arcade-btn-sp" type="button">
-                <span class="arcade-btn-icon">${Icons.rocket(20)}</span>
-                <span class="arcade-btn-label">SINGLEPLAYER</span>
-                <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
-              </button>
-
-              <!-- 2. Multiplayer -->
-              <button id="btn-nav-multiplayer" class="arcade-btn arcade-btn-mp" type="button">
-                <span class="arcade-btn-icon">${Icons.users(20)}</span>
-                <span class="arcade-btn-label">MULTIPLAYER</span>
-                <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
-              </button>
-
-              <!-- 3. Controls -->
-              <button id="btn-nav-controls" class="arcade-btn arcade-btn-sub" type="button">
-                <span class="arcade-btn-icon">${Icons.gamepad(18)}</span>
-                <span class="arcade-btn-label">CONTROLS</span>
-                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
-              </button>
-
-              <!-- 4. Settings -->
-              <button id="btn-nav-settings" class="arcade-btn arcade-btn-sub" type="button">
-                <span class="arcade-btn-icon">${Icons.settings(18)}</span>
-                <span class="arcade-btn-label">SETTINGS</span>
-                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
-              </button>
-
-              <!-- 5. Credits -->
-              <button id="btn-nav-credits" class="arcade-btn arcade-btn-sub" type="button">
-                <span class="arcade-btn-icon">${Icons.info(18)}</span>
-                <span class="arcade-btn-label">CREDITS</span>
-                <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
-              </button>
-            </div>
-
-            <!-- Multiplayer Submenu Options -->
-            <div class="nav-options-stack hidden" id="nav-options-multiplayer">
+            <!-- ================= STEP 2: PLAY MODE SELECTION (STEP 01 // 02) ================= -->
+            <div class="menu-step-container" id="step-play">
               <div class="subnav-header">
-                <button id="btn-multiplayer-back" class="btn-subnav-back" type="button">
+                <button class="btn-subnav-back" data-back-to="main" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>MAIN</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">STEP 01 // 02</span>
+                  <span class="subnav-title">MISSION MODE</span>
+                </div>
+              </div>
+
+              <div class="nav-options-stack">
+                <!-- Solo Mode Card -->
+                <button id="btn-select-solo" class="step-card-btn mode-card-solo" type="button">
+                  <div class="step-card-content">
+                    <div class="step-card-title-row">
+                      <span class="step-card-title">SINGLEPLAYER</span>
+                    </div>
+                    <p class="step-card-desc">Survive waves of enemy ships as long as you can</p>
+                  </div>
+                  <span class="step-card-chevron">${Icons.chevronRight(18)}</span>
+                </button>
+
+                <!-- Multiplayer Mode Card -->
+                <button id="btn-select-multiplayer" class="step-card-btn mode-card-mp" type="button">
+                  <div class="step-card-content">
+                    <div class="step-card-title-row">
+                      <span class="step-card-title">MULTIPLAYER ARENA</span>
+                    </div>
+                    <p class="step-card-desc">Real-time multiplayer gameplay, instant matchmaking, and custom private rooms.</p>
+                  </div>
+                  <span class="step-card-chevron">${Icons.chevronRight(18)}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- ================= STEP 3: SOLO MAP SELECTION & LAUNCH (STEP 02 // 02) ================= -->
+            <div class="menu-step-container" id="step-solo-map">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="play" type="button">
                   ${Icons.arrowLeft(15)}
                   <span>BACK</span>
                 </button>
-                <span class="subnav-title">MULTIPLAYER</span>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">STEP 02 // 02</span>
+                  <span class="subnav-title">DEPLOY SECTOR</span>
+                </div>
               </div>
 
-              <!-- Quick Play -->
-              <button id="btn-quick-play" class="arcade-btn arcade-btn-sp" type="button">
-                <span class="arcade-btn-icon" id="icon-quick-play">${Icons.play(18)}</span>
-                <span class="arcade-btn-label" id="text-quick-play">QUICK PLAY</span>
+              <!-- Selected Map Hero Card -->
+              <div class="sector-preview-hero" id="solo-sector-hero">
+                <div class="sector-hero-top">
+                  <span class="sector-hero-badge" id="solo-sector-badge">${activeMap.badge}</span>
+                  <span class="sector-hazard-badge" id="solo-sector-hazard">
+                    ${activeMap.asteroids?.enabled !== false ? 'Asteroids Active' : 'Clear Space'}
+                  </span>
+                </div>
+                <div class="sector-hero-name" id="solo-sector-name">${activeMap.name}</div>
+                <div class="sector-hero-desc" id="solo-sector-desc">${activeMap.description}</div>
+              </div>
+
+              <!-- Arena Map Selection Section -->
+              <div class="sector-selector-section">
+                <span class="panel-section-label">SELECT COMBAT ZONE</span>
+                <div class="menu-skybox-grid menu-map-grid" id="menu-map-grid">
+                  ${MAPS_CONFIG.map(m => `
+                    <button class="menu-skybox-btn menu-map-btn ${m.id === activeMapId ? 'active' : ''}" 
+                            data-map-id="${m.id}" 
+                            type="button" 
+                            title="${m.description}">
+                      <span class="menu-skybox-dot menu-map-dot" style="background: ${m.color}; box-shadow: 0 0 8px ${m.glow};"></span>
+                      <span class="menu-skybox-label menu-map-label">${m.shortName}</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+
+              <!-- Launch Solo Battle CTA Button -->
+              <button id="btn-launch-solo" class="arcade-btn arcade-btn-sp arcade-btn-launch" type="button">
+                <span class="arcade-btn-icon">${Icons.zap(20)}</span>
+                <span class="arcade-btn-label">LAUNCH MISSION</span>
+                <span class="arcade-btn-chevron">${Icons.chevronRight(18)}</span>
               </button>
+            </div>
 
-              <!-- Browse & Create Grid -->
-              <div class="action-grid-buttons">
-                <button id="btn-browse-lobbies" class="arcade-btn arcade-btn-sub" type="button">
-                  <span class="arcade-btn-icon">${Icons.list(15)}</span>
-                  <span class="arcade-btn-label">BROWSE</span>
+            <!-- ================= STEP 4: MULTIPLAYER HUB (STEP 02 // 02) ================= -->
+            <div class="menu-step-container" id="step-multiplayer">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="play" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>BACK</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">STEP 02 // 02</span>
+                  <span class="subnav-title">MULTIPLAYER</span>
+                </div>
+              </div>
+
+              <div class="nav-options-stack">
+                <!-- Quick Play -->
+                <button id="btn-quick-play" class="arcade-btn arcade-btn-sp" type="button">
+                  <span class="arcade-btn-icon" id="icon-quick-play">${Icons.play(18)}</span>
+                  <span class="arcade-btn-label" id="text-quick-play">QUICK PLAY</span>
                 </button>
 
-                <button id="btn-create-lobby-modal" class="arcade-btn arcade-btn-sub" type="button">
-                  <span class="arcade-btn-icon">${Icons.plus(15)}</span>
-                  <span class="arcade-btn-label">CREATE</span>
-                </button>
+                <!-- Browse & Create Grid -->
+                <div class="action-grid-buttons">
+                  <button id="btn-browse-lobbies" class="arcade-btn arcade-btn-sub" type="button">
+                    <span class="arcade-btn-icon">${Icons.list(15)}</span>
+                    <span class="arcade-btn-label">BROWSE</span>
+                  </button>
 
-                <button id="btn-join-code-modal" class="arcade-btn arcade-btn-sub btn-col-span-2" type="button">
-                  <span class="arcade-btn-icon">${Icons.hash(15)}</span>
-                  <span class="arcade-btn-label">ROOM CODE</span>
+                  <button id="btn-create-lobby-modal" class="arcade-btn arcade-btn-sub" type="button">
+                    <span class="arcade-btn-icon">${Icons.plus(15)}</span>
+                    <span class="arcade-btn-label">CREATE</span>
+                  </button>
+
+                  <button id="btn-join-code-modal" class="arcade-btn arcade-btn-sub btn-col-span-2" type="button">
+                    <span class="arcade-btn-icon">${Icons.hash(15)}</span>
+                    <span class="arcade-btn-label">JOIN VIA CODE</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- ================= STEP 5: FLEET HANGAR (SHIP CUSTOMIZATION) ================= -->
+            <div class="menu-step-container" id="step-hangar">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="main" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>MAIN</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">FIGHTERS</span>
+                  <span class="subnav-title">CUSTOMIZE SHIP</span>
+                </div>
+              </div>
+
+              <!-- Vessel Selection Stepper -->
+              <div class="ship-selector-hero">
+                <button id="btn-prev-ship" class="arcade-stepper-btn" aria-label="Previous Ship">
+                  ${Icons.chevronLeft(20)}
+                </button>
+                <div class="ship-hero-info">
+                  <h2 class="ship-title-text" id="ship-name-val">StarSparrow 1</h2>
+                  <span class="ship-counter-badge" id="ship-counter-badge">01 / ${SPACESHIP_CONFIGS.length}</span>
+                </div>
+                <button id="btn-next-ship" class="arcade-stepper-btn" aria-label="Next Ship">
+                  ${Icons.chevronRight(20)}
+                </button>
+              </div>
+
+              <!-- Tactical Specifications -->
+              <div class="ship-specs-container">
+                <div class="spec-row">
+                  <div class="spec-header">
+                    <span class="spec-label">TOP SPEED</span>
+                    <span class="spec-val" id="spec-speed-val">55 m/s</span>
+                  </div>
+                  <div class="spec-track">
+                    <div class="spec-fill" id="spec-speed-fill" style="width: 70%;"></div>
+                  </div>
+                </div>
+
+                <div class="spec-row">
+                  <div class="spec-header">
+                    <span class="spec-label">BOOST TURBO</span>
+                    <span class="spec-val" id="spec-boost-val">121 m/s</span>
+                  </div>
+                  <div class="spec-track">
+                    <div class="spec-fill spec-fill-boost" id="spec-boost-fill" style="width: 80%;"></div>
+                  </div>
+                </div>
+
+                <div class="spec-row">
+                  <div class="spec-header">
+                    <span class="spec-label">AGILITY / ROLL</span>
+                    <span class="spec-val" id="spec-agility-val">88%</span>
+                  </div>
+                  <div class="spec-track">
+                    <div class="spec-fill spec-fill-agility" id="spec-agility-fill" style="width: 88%;"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Paint Scheme Swatches -->
+              <div class="panel-section">
+                <span class="panel-section-label">HULL PAINT SCHEME</span>
+                <div class="color-swatches-grid" id="color-swatches-grid">
+                  ${COLOR_SWATCHES.map(sw => `
+                    <button class="color-swatch-circle ${sw.key === this.selectedThemeKey ? 'active' : ''}"
+                            data-key="${sw.key}"
+                            title="${sw.name}"
+                            style="background-color: ${sw.hex};"
+                            aria-label="${sw.name}">
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+
+            <!-- ================= FLIGHT CONTROLS ================= -->
+            <div class="menu-step-container" id="step-controls">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="main" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>MAIN</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">FLIGHT MANUAL</span>
+                  <span class="subnav-title">CONTROLS GUIDE</span>
+                </div>
+              </div>
+
+              <div class="controls-guide-body">
+                <div class="controls-section-title">KEYBOARD & MOUSE</div>
+                <div class="control-key-item"><span class="control-key-badge">W / S</span><span class="control-key-desc">Throttle Up / Reverse</span></div>
+                <div class="control-key-item"><span class="control-key-badge">A / D</span><span class="control-key-desc">Turn Left / Right (Bank)</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Up / Down</span><span class="control-key-desc">Pitch Dive / Climb</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Q / E</span><span class="control-key-desc">Yaw Rudder Left / Right</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Space / Shift</span><span class="control-key-desc">Afterburner Boost Turbo</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Enter / F / Click</span><span class="control-key-desc">Fire Pulse Lasers</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Esc / O</span><span class="control-key-desc">In-Game Tactical Options</span></div>
+
+                <div class="controls-section-title" style="margin-top: 10px;">MOBILE & TOUCH</div>
+                <div class="control-key-item"><span class="control-key-badge">Left Joystick</span><span class="control-key-desc">Flight Steering & Throttle</span></div>
+                <div class="control-key-item"><span class="control-key-badge">Right Button</span><span class="control-key-desc">Rapid Weapon Fire</span></div>
+              </div>
+            </div>
+
+            <!-- ================= STEP 8: SYSTEM SETTINGS ================= -->
+            <div class="menu-step-container" id="step-settings">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="main" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>MAIN</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">SYSTEM CONFIG</span>
+                  <span class="subnav-title">SETTINGS</span>
+                </div>
+              </div>
+
+              <div class="settings-guide-body">
+                <!-- Fullscreen Toggle -->
+                <div class="settings-action-row">
+                  <div class="settings-info">
+                    <span class="settings-title">FULLSCREEN</span>
+                    <span class="settings-desc">Borderless display mode</span>
+                  </div>
+                  <button id="btn-toggle-fullscreen-menu" class="btn-glass-sm" type="button">Toggle</button>
+                </div>
+
+                <!-- Dev Stats HUD -->
+                <div class="settings-action-row">
+                  <div class="settings-info">
+                    <span class="settings-title">DEV STATS HUD</span>
+                    <span class="settings-desc">FPS, latency, draw calls</span>
+                  </div>
+                  <button id="btn-toggle-devstats-menu" class="btn-glass-sm" type="button">Toggle</button>
+                </div>
+
+                <!-- Open Full In-Game Options Modal -->
+                <button id="btn-open-full-settings" class="arcade-btn arcade-btn-sub" style="margin-top: 10px;" type="button">
+                  <span class="arcade-btn-icon">${Icons.settings(16)}</span>
+                  <span class="arcade-btn-label">ADVANCED OPTIONS</span>
+                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
                 </button>
               </div>
             </div>
+
+            <!-- ================= STEP 9: CREDITS ================= -->
+            <div class="menu-step-container" id="step-credits">
+              <div class="subnav-header">
+                <button class="btn-subnav-back" data-back-to="main" type="button">
+                  ${Icons.arrowLeft(15)}
+                  <span>MAIN</span>
+                </button>
+                <div class="subnav-title-group">
+                  <span class="subnav-step-badge">TRANSMISSION</span>
+                  <span class="subnav-title">CREDITS</span>
+                </div>
+              </div>
+
+              <div class="credits-body">
+                <div class="credits-item"><span class="credits-role">Engine</span><span class="credits-val">Three.js PBR WebGL</span></div>
+                <div class="credits-item"><span class="credits-role">Vessels</span><span class="credits-val">StarSparrow Modular Fleet</span></div>
+                <div class="credits-item"><span class="credits-role">Audio</span><span class="credits-val">Web Audio API Synthesizer</span></div>
+                <div class="credits-item"><span class="credits-role">Network</span><span class="credits-val">WebSocket Real-Time Protocol</span></div>
+                <div class="credits-item"><span class="credits-role">Typography</span><span class="credits-val">Outfit Variable Sans</span></div>
+              </div>
+            </div>
+
           </div>
         </aside>
-      </div>
-
-      <!-- ================= CONTROLS MODAL ================= -->
-      <div class="modal-backdrop hidden" id="modal-controls">
-        <div class="modal-card">
-          <div class="modal-header">
-            <h3 class="modal-title">CONTROLS</h3>
-            <button class="icon-btn-ghost" id="btn-close-controls" title="Close" aria-label="Close" type="button">
-              ${Icons.x(18)}
-            </button>
-          </div>
-
-          <div class="controls-content-grid">
-            <div class="controls-column">
-              <h4 class="controls-group-title">KEYBOARD CONTROLS</h4>
-              <div class="control-key-item">
-                <span class="control-key-badge">W / S</span>
-                <span class="control-key-desc">Throttle / Reverse</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">A / D</span>
-                <span class="control-key-desc">Turn Left / Right (Bank)</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Up / Down</span>
-                <span class="control-key-desc">Pitch Dive / Climb</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Q / E</span>
-                <span class="control-key-desc">Roll Left / Right</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Space / Shift</span>
-                <span class="control-key-desc">Boost Turbo</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Enter / F</span>
-                <span class="control-key-desc">Fire Lasers</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Esc / O</span>
-                <span class="control-key-desc">Options</span>
-              </div>
-            </div>
-
-            <div class="controls-column">
-              <h4 class="controls-group-title">TOUCH CONTROLS</h4>
-              <div class="control-key-item">
-                <span class="control-key-badge">Left Thumb</span>
-                <span class="control-key-desc">Steering Joystick</span>
-              </div>
-              <div class="control-key-item">
-                <span class="control-key-badge">Right Button</span>
-                <span class="control-key-desc">Laser Fire</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ================= CREDITS MODAL ================= -->
-      <div class="modal-backdrop hidden" id="modal-credits">
-        <div class="modal-card modal-card-sm">
-          <div class="modal-header">
-            <h3 class="modal-title">CREDITS</h3>
-            <button class="icon-btn-ghost" id="btn-close-credits" title="Close" aria-label="Close" type="button">
-              ${Icons.x(18)}
-            </button>
-          </div>
-
-          <div class="credits-body">
-            <div class="credits-item">
-              <span class="credits-role">Engine</span>
-              <span class="credits-val">Three.js</span>
-            </div>
-            <div class="credits-item">
-              <span class="credits-role">Models</span>
-              <span class="credits-val">StarSparrow Fleet</span>
-            </div>
-            <div class="credits-item">
-              <span class="credits-role">Audio</span>
-              <span class="credits-val">Web Audio API</span>
-            </div>
-            <div class="credits-item">
-              <span class="credits-role">Font</span>
-              <span class="credits-val">Outfit</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- ================= PUBLIC ROOMS BROWSER MODAL ================= -->
@@ -415,7 +520,7 @@ export class LobbyUI {
           <form id="form-create-match" class="minimal-form">
             <div class="form-field">
               <label for="create-room-name">Room Name</label>
-              <input type="text" id="create-room-name" value="${this.callsign}'s Game" maxlength="28" required />
+              <input type="text" id="create-room-name" value="${escapeHTML(this.callsign)}'s Game" maxlength="28" required />
             </div>
 
             <div class="form-grid-2">
@@ -540,10 +645,22 @@ export class LobbyUI {
 
     // Cache elements
     this.screenMain = document.getElementById('screen-main');
-    this.panelHangar = document.getElementById('panel-hangar');
     this.panelMenu = document.getElementById('panel-menu');
 
-    // Left Panel Hangar elements
+    // Left Viewport Watermark elements
+    this.watermarkShipCounter = document.getElementById('watermark-ship-counter');
+    this.watermarkShipName = document.getElementById('watermark-ship-name');
+    this.watermarkSpdVal = document.getElementById('watermark-spd-val');
+    this.watermarkBstVal = document.getElementById('watermark-bst-val');
+    this.watermarkAglVal = document.getElementById('watermark-agl-val');
+
+    // Title / Status elements
+    this.navStatus = document.getElementById('nav-status');
+    this.navStatusText = document.getElementById('nav-status-text');
+    this.inputCallsign = document.getElementById('input-callsign');
+    this.btnRandomCallsign = document.getElementById('btn-random-callsign');
+
+    // Hangar elements
     this.shipCounterEl = document.getElementById('ship-counter-badge');
     this.shipNameEl = document.getElementById('ship-name-val');
     this.btnPrevShip = document.getElementById('btn-prev-ship');
@@ -558,20 +675,11 @@ export class LobbyUI {
     this.specAgilityVal = document.getElementById('spec-agility-val');
     this.specAgilityFill = document.getElementById('spec-agility-fill');
 
-    // Right Panel Navigation elements
-    this.navStatus = document.getElementById('nav-status');
-    this.navStatusText = document.getElementById('nav-status-text');
-    this.inputCallsign = document.getElementById('input-callsign');
-    this.btnRandomCallsign = document.getElementById('btn-random-callsign');
-
-    this.navOptionsMain = document.getElementById('nav-options-main');
-    this.navOptionsMultiplayer = document.getElementById('nav-options-multiplayer');
-    this.btnNavSingleplayer = document.getElementById('btn-nav-singleplayer');
-    this.btnNavMultiplayer = document.getElementById('btn-nav-multiplayer');
-    this.btnMultiplayerBack = document.getElementById('btn-multiplayer-back');
-    this.btnNavControls = document.getElementById('btn-nav-controls');
-    this.btnNavSettings = document.getElementById('btn-nav-settings');
-    this.btnNavCredits = document.getElementById('btn-nav-credits');
+    // Solo Map Preview elements
+    this.soloSectorBadge = document.getElementById('solo-sector-badge');
+    this.soloSectorHazard = document.getElementById('solo-sector-hazard');
+    this.soloSectorName = document.getElementById('solo-sector-name');
+    this.soloSectorDesc = document.getElementById('solo-sector-desc');
 
     // Multiplayer actions
     this.btnQuickPlay = document.getElementById('btn-quick-play');
@@ -580,14 +688,6 @@ export class LobbyUI {
     this.btnBrowseLobbies = document.getElementById('btn-browse-lobbies');
     this.btnCreateLobbyModal = document.getElementById('btn-create-lobby-modal');
     this.btnJoinCodeModal = document.getElementById('btn-join-code-modal');
-
-    // Controls Modal
-    this.modalControls = document.getElementById('modal-controls');
-    this.btnCloseControls = document.getElementById('btn-close-controls');
-
-    // Credits Modal
-    this.modalCredits = document.getElementById('modal-credits');
-    this.btnCloseCredits = document.getElementById('btn-close-credits');
 
     // Browser Modal
     this.modalBrowser = document.getElementById('modal-browser');
@@ -636,7 +736,32 @@ export class LobbyUI {
   }
 
   setupListeners() {
-    // Callsign input
+    // 1. Step Navigation: Back Buttons
+    this.root?.querySelectorAll('.btn-subnav-back').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.getAttribute('data-back-to') || 'main';
+        this.navigateToStep(target);
+      });
+    });
+
+    // 2. Main Step Buttons
+    document.getElementById('btn-goto-play')?.addEventListener('click', () => this.navigateToStep('play'));
+    document.getElementById('btn-goto-hangar')?.addEventListener('click', () => this.navigateToStep('hangar'));
+    document.getElementById('btn-goto-controls')?.addEventListener('click', () => this.navigateToStep('controls'));
+    document.getElementById('btn-goto-settings')?.addEventListener('click', () => this.navigateToStep('settings'));
+    document.getElementById('btn-goto-credits')?.addEventListener('click', () => this.navigateToStep('credits'));
+
+    // 3. Play Mode Choices
+    document.getElementById('btn-select-solo')?.addEventListener('click', () => this.navigateToStep('solo-map'));
+    document.getElementById('btn-select-multiplayer')?.addEventListener('click', () => this.navigateToStep('multiplayer'));
+
+    // 4. Solo Battle Launch
+    document.getElementById('btn-launch-solo')?.addEventListener('click', () => {
+      sounds.playClick();
+      if (this.onStartSolo) this.onStartSolo();
+    });
+
+    // 5. Callsign input & randomize (directly in default menu)
     this.inputCallsign?.addEventListener('input', (e) => {
       this.callsign = e.target.value.trim() || 'Pilot';
       localStorage.setItem('spacegame_callsign', this.callsign);
@@ -649,31 +774,24 @@ export class LobbyUI {
       localStorage.setItem('spacegame_callsign', this.callsign);
     });
 
-    // Ship Stepper
+    // 6. Ship Steppers
     this.btnPrevShip?.addEventListener('click', () => this.cycleShip(-1));
     this.btnNextShip?.addEventListener('click', () => this.cycleShip(1));
 
-    // Color Swatches
+    // 7. Color Swatches
     this.colorSwatchesGrid?.querySelectorAll('.color-swatch-circle').forEach(btn => {
       btn.addEventListener('click', () => {
         const themeKey = btn.getAttribute('data-key');
-        if (themeKey) {
-          this.selectColorTheme(themeKey);
-        }
+        if (themeKey) this.selectColorTheme(themeKey);
       });
     });
 
-    // Arena Map Selection in right side menu
-    this.mapGrid = document.getElementById('menu-map-grid');
-    this.mapBadge = document.getElementById('menu-map-badge');
-
-    this.mapGrid?.querySelectorAll('.menu-map-btn').forEach(btn => {
+    // 8. Arena Map Selection
+    this.root?.querySelectorAll('.menu-map-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         sounds.playClick();
         const mapId = btn.getAttribute('data-map-id');
-        if (mapId) {
-          this.selectMap(mapId);
-        }
+        if (mapId) this.selectMap(mapId);
       });
     });
 
@@ -682,7 +800,7 @@ export class LobbyUI {
       this.selectMap(e.target.value);
     });
 
-    // Listen to changes from MapManager (e.g. sequential advance on match end)
+    // Listen to changes from MapManager
     if (this.mapManager && typeof this.mapManager.onMapChange === 'function') {
       this.mapManager.onMapChange((map) => {
         if (map && map.id) {
@@ -697,43 +815,88 @@ export class LobbyUI {
       });
     }
 
-    // Navigation: Singleplayer
-    this.btnNavSingleplayer?.addEventListener('click', () => {
+    // 9. Interactive 360 Drag-to-Inspect Vessel on Left Viewport
+    const viewportEl = document.getElementById('ship-viewport-space');
+    if (viewportEl) {
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let startRotY = 0;
+      let startRotX = 0;
+
+      viewportEl.addEventListener('pointerdown', (e) => {
+        if (this.currentScreen !== 'main') return;
+        isDragging = true;
+        window._isUserDraggingShip = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        if (this.spaceship && this.spaceship.root) {
+          startRotY = this.spaceship.root.rotation.y;
+          startRotX = this.spaceship.root.rotation.x;
+        }
+        try {
+          viewportEl.setPointerCapture?.(e.pointerId);
+        } catch {}
+      });
+
+      viewportEl.addEventListener('pointermove', (e) => {
+        if (!isDragging || !this.spaceship || !this.spaceship.root) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        this.spaceship.root.rotation.y = startRotY + dx * 0.008;
+        this.spaceship.root.rotation.x = Math.max(-0.4, Math.min(0.4, startRotX + dy * 0.004));
+      });
+
+      const stopDragging = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        setTimeout(() => {
+          window._isUserDraggingShip = false;
+        }, 350);
+        try {
+          viewportEl.releasePointerCapture?.(e.pointerId);
+        } catch {}
+      };
+
+      viewportEl.addEventListener('pointerup', stopDragging);
+      viewportEl.addEventListener('pointercancel', stopDragging);
+    }
+
+    // 10. Settings Toggles
+    document.getElementById('btn-toggle-fullscreen-menu')?.addEventListener('click', async () => {
       sounds.playClick();
-      if (this.onStartSolo) this.onStartSolo();
-    });
-
-    // Navigation: Multiplayer Toggle Submenu
-    this.btnNavMultiplayer?.addEventListener('click', () => {
-      sounds.playClick();
-      this.navOptionsMain?.classList.add('hidden');
-      this.navOptionsMultiplayer?.classList.remove('hidden');
-    });
-
-    this.btnMultiplayerBack?.addEventListener('click', () => {
-      sounds.playClick();
-      this.navOptionsMultiplayer?.classList.add('hidden');
-      this.navOptionsMain?.classList.remove('hidden');
-    });
-
-    // Navigation: Controls Modal
-    this.btnNavControls?.addEventListener('click', () => {
-      sounds.playClick();
-      this.modalControls?.classList.remove('hidden');
-    });
-
-    this.btnCloseControls?.addEventListener('click', () => {
-      this.modalControls?.classList.add('hidden');
-    });
-
-    this.modalControls?.addEventListener('click', (e) => {
-      if (e.target === this.modalControls) {
-        this.modalControls.classList.add('hidden');
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+          this.showToast('Fullscreen enabled', 'info');
+        } else {
+          await document.exitFullscreen();
+          this.showToast('Fullscreen disabled', 'info');
+        }
+      } catch (err) {
+        this.showToast('Fullscreen request rejected by browser', 'error');
       }
     });
 
-    // Navigation: Settings
-    this.btnNavSettings?.addEventListener('click', () => {
+    document.getElementById('btn-toggle-devstats-menu')?.addEventListener('click', () => {
+      sounds.playClick();
+      const current = localStorage.getItem('spacegame_dev_stats') === 'true';
+      const next = !current;
+      localStorage.setItem('spacegame_dev_stats', String(next));
+      if (this.onOpenSettings) {
+        // OptionsMenu listens to devStatsEnabled
+      }
+      this.showToast(`Dev Stats ${next ? 'enabled' : 'disabled'}`, 'info');
+      // Trigger dev stats toggle if global reference exists
+      const optBtn = document.getElementById('btn-options-toggle');
+      if (optBtn) {
+        // Toggle HUD directly if possible
+        const hud = document.getElementById('dev-stats-hud');
+        if (hud) hud.classList.toggle('visible', next);
+      }
+    });
+
+    document.getElementById('btn-open-full-settings')?.addEventListener('click', () => {
       sounds.playClick();
       if (this.onOpenSettings) {
         this.onOpenSettings();
@@ -743,30 +906,13 @@ export class LobbyUI {
       }
     });
 
-    // Navigation: Credits Modal
-    this.btnNavCredits?.addEventListener('click', () => {
-      sounds.playClick();
-      this.modalCredits?.classList.remove('hidden');
-    });
-
-    this.btnCloseCredits?.addEventListener('click', () => {
-      this.modalCredits?.classList.add('hidden');
-    });
-
-    this.modalCredits?.addEventListener('click', (e) => {
-      if (e.target === this.modalCredits) {
-        this.modalCredits.classList.add('hidden');
-      }
-    });
-
-    // Quick Play
+    // 11. Multiplayer Actions
     this.btnQuickPlay?.addEventListener('click', async () => {
       if (this.isLoading) return;
       sounds.playClick();
       await this.handleQuickPlay();
     });
 
-    // Browse Rooms Modal
     this.btnBrowseLobbies?.addEventListener('click', () => {
       sounds.playClick();
       this.modalBrowser?.classList.remove('hidden');
@@ -786,11 +932,11 @@ export class LobbyUI {
       this.refreshBrowser();
     });
 
-    // Create Room Modal
     this.btnCreateLobbyModal?.addEventListener('click', () => {
-      const currentId = this.skyboxManager?.currentSkybox?.id;
+      sounds.playClick();
+      const currentId = this.skyboxManager?.currentSkybox?.id || this.mapManager?.getCurrentMap?.()?.id;
       if (currentId) {
-        const sel = document.getElementById('create-skybox');
+        const sel = document.getElementById('create-map');
         if (sel) sel.value = currentId;
       }
       this.modalCreate?.classList.remove('hidden');
@@ -809,7 +955,6 @@ export class LobbyUI {
       await this.handleCreateMatch();
     });
 
-    // Join Code Modal
     this.btnJoinCodeModal?.addEventListener('click', () => {
       sounds.playClick();
       this.modalJoinCode?.classList.remove('hidden');
@@ -830,7 +975,7 @@ export class LobbyUI {
       if (code) await this.handleJoinRoom(code);
     });
 
-    // Staging Actions
+    // 12. Staging Actions
     this.btnCopyLink?.addEventListener('click', () => {
       sounds.playClick();
       this.copyInviteLink();
@@ -862,18 +1007,37 @@ export class LobbyUI {
     });
   }
 
-  setActiveMobileTab() {}
+  navigateToStep(stepId) {
+    if (this.currentStep === stepId) return;
+    sounds.playClick();
+
+    const currentEl = document.getElementById(`step-${this.currentStep}`);
+    if (currentEl) currentEl.classList.remove('active');
+
+    const nextEl = document.getElementById(`step-${stepId}`);
+    if (nextEl) nextEl.classList.add('active');
+
+    this.currentStep = stepId;
+
+    if (stepId === 'solo-map') {
+      const activeMap = this.mapManager?.getCurrentMap?.() || getDefaultMap();
+      this.updateActiveMapUI(activeMap.id, activeMap.name);
+    } else if (stepId === 'hangar') {
+      this.updateShipDisplay();
+    }
+  }
 
   updateShipDisplay() {
     const config = SPACESHIP_CONFIGS[this.selectedShipIndex] || SPACESHIP_CONFIGS[0];
     if (this.shipNameEl) this.shipNameEl.textContent = config.name;
 
+    const idxStr = String(this.selectedShipIndex + 1).padStart(2, '0');
+    const totalStr = String(SPACESHIP_CONFIGS.length).padStart(2, '0');
     if (this.shipCounterEl) {
-      const idxStr = String(this.selectedShipIndex + 1).padStart(2, '0');
-      this.shipCounterEl.textContent = `${idxStr} / ${SPACESHIP_CONFIGS.length}`;
+      this.shipCounterEl.textContent = `${idxStr} / ${totalStr}`;
     }
 
-    // Dynamic handling specs calculation
+    // Dynamic specs
     const handling = config.handling || {};
     const maxSpeed = handling.maxSpeed || 50;
     const boostSpeed = handling.boostSpeed || 110;
@@ -891,6 +1055,13 @@ export class LobbyUI {
 
     if (this.specAgilityVal) this.specAgilityVal.textContent = `${agilityPct}%`;
     if (this.specAgilityFill) this.specAgilityFill.style.width = `${agilityPct}%`;
+
+    // Live update left-side tactical watermark overlay
+    if (this.watermarkShipName) this.watermarkShipName.textContent = config.name;
+    if (this.watermarkShipCounter) this.watermarkShipCounter.textContent = `${idxStr} / ${totalStr}`;
+    if (this.watermarkSpdVal) this.watermarkSpdVal.textContent = Math.round(maxSpeed);
+    if (this.watermarkBstVal) this.watermarkBstVal.textContent = Math.round(boostSpeed);
+    if (this.watermarkAglVal) this.watermarkAglVal.textContent = `${agilityPct}%`;
   }
 
   showToast(message, type = 'info') {
@@ -914,13 +1085,12 @@ export class LobbyUI {
       if (dot) dot.style.background = '#22c55e';
       this.navStatusText.textContent = `Connected · ${pingMs || 0}ms`;
     } else {
-      if (dot) dot.style.background = '#e2e8f0';
+      if (dot) dot.style.background = '#94a3b8';
       this.navStatusText.textContent = 'Connecting...';
     }
   }
 
   cycleShip(delta) {
-    // Player cannot change ship during active gameplay or outside main menu
     if (this.currentScreen !== 'main' || (this.spaceship && this.spaceship.enabled)) {
       return;
     }
@@ -930,13 +1100,12 @@ export class LobbyUI {
     localStorage.setItem('spacegame_ship_index', this.selectedShipIndex);
     this.updateShipDisplay();
 
-    // Live update 3D ship in background without jarring position resets
+    // Live update 3D ship in background
     if (this.spaceship && typeof this.spaceship.selectShip === 'function') {
       this.spaceship.selectShip(this.selectedShipIndex).then(() => {
-        // Re-apply selected color theme to newly loaded model
         this.selectColorTheme(this.selectedThemeKey, false);
       }).catch(err => {
-        console.warn('Failed to switch ship model in background:', err);
+        console.warn('Failed to switch ship model:', err);
       });
     }
 
@@ -951,7 +1120,6 @@ export class LobbyUI {
   }
 
   selectColorTheme(themeKey, playSound = true) {
-    // Player cannot change color during active gameplay or outside main menu
     if (this.currentScreen !== 'main' || (this.spaceship && this.spaceship.enabled)) {
       return;
     }
@@ -990,27 +1158,23 @@ export class LobbyUI {
     this.updateActiveMapUI(mapId);
   }
 
-  selectSkybox(skyboxId) {
-    this.selectMap(skyboxId);
-  }
-
   updateActiveMapUI(mapId, mapName = null) {
     if (!mapId) return;
     const grid = document.getElementById('menu-map-grid');
     if (grid) {
       grid.querySelectorAll('.menu-map-btn').forEach(btn => {
-        if (btn.getAttribute('data-map-id') === mapId) {
-          btn.classList.add('active');
-        } else {
-          btn.classList.remove('active');
-        }
+        btn.classList.toggle('active', btn.getAttribute('data-map-id') === mapId);
       });
     }
 
-    const badge = document.getElementById('menu-map-badge');
-    if (badge) {
-      const match = MAPS_CONFIG.find(m => m.id === mapId);
-      badge.textContent = mapName || (match ? match.name : mapId);
+    const map = getMapById(mapId);
+    if (map) {
+      if (this.soloSectorBadge) this.soloSectorBadge.textContent = map.badge || 'COMBAT ZONE';
+      if (this.soloSectorHazard) {
+        this.soloSectorHazard.textContent = map.asteroids?.enabled !== false ? 'Asteroids Active' : 'Clear Space';
+      }
+      if (this.soloSectorName) this.soloSectorName.textContent = mapName || map.name;
+      if (this.soloSectorDesc) this.soloSectorDesc.textContent = map.description || '';
     }
 
     // Also sync the dropdown in Create Room modal if present
@@ -1018,10 +1182,6 @@ export class LobbyUI {
     if (createSelect && createSelect.value !== mapId) {
       createSelect.value = mapId;
     }
-  }
-
-  updateActiveSkyboxUI(skyboxId, skyboxName = null) {
-    this.updateActiveMapUI(skyboxId, skyboxName);
   }
 
   checkDeepLink() {
@@ -1088,7 +1248,7 @@ export class LobbyUI {
       console.error('Quick play error:', err);
       this.showToast(err.message || 'Unable to join. Try creating a room.', 'error');
     } finally {
-      this.setButtonLoading(this.btnQuickPlay, this.iconQuickPlay, this.textQuickPlay, false, 'Quick Play', Icons.play(16));
+      this.setButtonLoading(this.btnQuickPlay, this.iconQuickPlay, this.textQuickPlay, false, 'QUICK PLAY', Icons.play(18));
     }
   }
 
@@ -1350,8 +1510,7 @@ export class LobbyUI {
       this.screenMain.classList.remove('hidden');
       this.screenMain.style.display = 'flex';
     }
-    this.navOptionsMain?.classList.remove('hidden');
-    this.navOptionsMultiplayer?.classList.add('hidden');
+    this.navigateToStep('main');
     this.root.classList.add('visible');
     if (this.onLeaveToMenu) {
       this.onLeaveToMenu();

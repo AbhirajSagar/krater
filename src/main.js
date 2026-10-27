@@ -247,27 +247,35 @@ function updateViewportAndAspectRatio() {
   updateMenuLayout();
 }
 
-// Game State Switching Functions & Floating Menu Layout (Fixed Laptop / Desktop Menu Layout)
+// Game State Switching Functions & Responsive Menu Layout (Spaceship on Left, Menu on Right)
 function updateMenuLayout() {
   if (currentGameState !== 'MENU') return;
-  const isCompact = window.innerWidth <= 1024 || window.innerHeight <= 540;
-  if (isCompact) {
-    // In compact landscape, position ship cleanly in the center gap between left and right panels
-    if (spaceship) {
-      spaceship.root.position.set(0, 0.05, 0);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const isCompact = w <= 1024 || h <= 540;
+
+  // Calculate right menu width in pixels for accurate mathematical left-centering
+  const menuWidth = Math.min(w * (isCompact ? 0.52 : 0.38), isCompact ? 350 : 440);
+  
+  // Normalized device coordinate (NDC) of the left viewport's center (-1 is left edge, +1 is right)
+  const ndcX = -(menuWidth / w);
+  
+  // Calculate visible width in 3D world space at spaceship depth
+  const camDist = isCompact ? 6.6 : 5.8;
+  const halfHeight = camDist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const halfWidth = halfHeight * camera.aspect;
+  const shipX = ndcX * halfWidth;
+
+  if (spaceship) {
+    spaceship.root.position.set(shipX, isCompact ? 0.05 : -0.05, 0);
+    if (!window._isUserDraggingShip) {
       spaceship.root.rotation.set(0.08, 0.45, 0);
     }
-    baseCamPos.set(0, 0.65, 6.8);
-    baseCamLook.set(0, 0.1, 0);
-  } else {
-    // Standard laptop/desktop layout: ship is centered in viewport between left hangar and right menu panels
-    if (spaceship) {
-      spaceship.root.position.set(-0.75, -0.15, 0);
-      spaceship.root.rotation.set(0.08, 0.45, 0);
-    }
-    baseCamPos.set(0, 0.8, 5.8);
-    baseCamLook.set(0, 0.2, 0);
   }
+
+  baseCamPos.set(0, isCompact ? 0.55 : 0.75, camDist);
+  baseCamLook.set(shipX * 0.25, 0.15, 0);
+
   camera.position.copy(baseCamPos);
   camera.lookAt(baseCamLook);
 }
@@ -546,7 +554,7 @@ function animate() {
       }
     }
   } else if (currentGameState === 'MENU') {
-    if (spaceship) {
+    if (spaceship && !window._isUserDraggingShip) {
       spaceship.root.rotation.y += dt * 0.22;
     }
 

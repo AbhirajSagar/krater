@@ -1208,21 +1208,108 @@ body.touch-device #touch-controls.visible {
 }
 
 /* =========================================================
-   LEFT SIDE: SHIP SELECTOR HANGAR PANEL
+   LEFT SIDE: OPEN 3D SHIP VIEWPORT & VESSEL WATERMARK
    ========================================================= */
 
-.menu-left-panel {
-  width: 360px;
-  max-width: 360px;
-  max-height: calc(100vh - 64px);
-  overflow-y: auto;
+.menu-left-viewport {
+  flex: 1 1 auto;
+  height: 100%;
+  position: relative;
   pointer-events: auto;
-  z-index: 10;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  touch-action: none;
+  cursor: grab;
+}
+
+.menu-left-viewport:active {
+  cursor: grabbing;
+}
+
+.vessel-watermark-overlay {
+  position: absolute;
+  bottom: 28px;
+  left: 28px;
+  background: rgba(6, 10, 18, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   animation: panelSlideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-  display: block;
-  flex-shrink: 0;
+  z-index: 10;
+}
+
+.watermark-badge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.watermark-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #00f0ff;
+  text-transform: uppercase;
+}
+
+.watermark-counter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffbf00;
+  letter-spacing: 1px;
+}
+
+.watermark-ship-name {
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.watermark-stats-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+}
+
+.wm-stat-lbl {
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.wm-stat-val {
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.wm-divider {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.watermark-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 
 @keyframes panelSlideLeft {
@@ -1494,12 +1581,12 @@ body.touch-device #touch-controls.visible {
    ========================================================= */
 
 .menu-right-panel {
-  width: 370px;
-  max-width: 370px;
-  max-height: calc(100vh - 64px);
+  width: clamp(320px, 36vw, 440px);
+  max-width: 440px;
+  max-height: calc(100vh - 48px);
   overflow-y: auto;
   pointer-events: auto;
-  z-index: 10;
+  z-index: 20;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
   animation: panelSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1516,6 +1603,445 @@ body.touch-device #touch-controls.visible {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* Progressive Menu Step Containers */
+.menu-step-container {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.menu-step-container.active {
+  display: flex;
+  animation: stepFadeSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes stepFadeSlide {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Menu Title Block & Identity */
+.menu-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid rgba(0, 240, 255, 0.25);
+}
+
+.title-logo-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #00f0ff;
+  text-transform: uppercase;
+}
+
+.tag-pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 8px #00f0ff;
+  animation: pulseRecDot 1.5s infinite;
+}
+
+.title-logo-text {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 900;
+  letter-spacing: 5px;
+  line-height: 1.05;
+  background: linear-gradient(135deg, #ffffff 0%, #00f0ff 65%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 16px rgba(0, 240, 255, 0.4));
+  text-transform: uppercase;
+}
+
+.title-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.meta-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 4px 9px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.meta-pilot-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  padding: 2px 7px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  max-width: 175px;
+}
+
+.meta-pilot-input-wrap:focus-within {
+  border-color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+.pilot-tag-label {
+  color: #ff007f;
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pilot-tag-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-family: inherit;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  width: 85px;
+  min-width: 50px;
+  padding: 2px 0;
+}
+
+.pilot-tag-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.btn-random-pilot {
+  padding: 2px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.btn-random-pilot:hover {
+  color: #00f0ff;
+  transform: rotate(45deg);
+}
+
+/* Step Subnav Header */
+.subnav-title-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.subnav-step-badge {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #00f0ff;
+  text-transform: uppercase;
+}
+
+/* Step Card Choice Buttons (Solo / Multiplayer) */
+.step-card-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+  background: linear-gradient(180deg, rgba(22, 28, 42, 0.95) 0%, rgba(12, 16, 26, 0.95) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  color: #ffffff;
+  text-align: left;
+  outline: none;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  width: 100%;
+}
+
+.step-card-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+}
+
+.mode-card-solo:hover {
+  border-color: #00f0ff;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.28);
+}
+
+.mode-card-mp:hover {
+  border-color: #ff007f;
+  box-shadow: 0 0 20px rgba(255, 0, 128, 0.28);
+}
+
+.step-card-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+}
+
+.mode-card-solo .step-card-icon-wrap {
+  color: #00f0ff;
+  border-color: rgba(0, 240, 255, 0.4);
+}
+
+.mode-card-mp .step-card-icon-wrap {
+  color: #ff007f;
+  border-color: rgba(255, 0, 128, 0.4);
+}
+
+.step-card-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.step-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.step-card-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.step-card-tag {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: #00f0ff;
+  letter-spacing: 0.8px;
+}
+
+.step-card-tag.tag-mp {
+  background: rgba(255, 0, 128, 0.12);
+  border-color: rgba(255, 0, 128, 0.35);
+  color: #ff007f;
+}
+
+.step-card-desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
+.step-card-chevron {
+  opacity: 0.6;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.step-card-btn:hover .step-card-chevron {
+  transform: translateX(3px);
+  opacity: 1;
+}
+
+/* Solo Sector Preview Card & CTA */
+.sector-preview-hero {
+  background: rgba(6, 8, 14, 0.9);
+  border: 1px solid rgba(0, 240, 255, 0.28);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sector-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.sector-hero-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #00f0ff;
+  letter-spacing: 1px;
+}
+
+.sector-hazard-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffbf00;
+  background: rgba(255, 191, 0, 0.12);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 191, 0, 0.35);
+}
+
+.sector-hero-name {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  text-transform: uppercase;
+}
+
+.sector-hero-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.sector-selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arcade-btn-launch {
+  margin-top: 4px;
+  padding: 14px 18px;
+  font-size: 15px;
+  justify-content: center;
+  animation: pulseLaunchGlow 2.4s infinite;
+}
+
+@keyframes pulseLaunchGlow {
+  0%, 100% {
+    box-shadow: 0 5px 0 #005080, 0 8px 24px rgba(0, 240, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 5px 0 #005080, 0 8px 34px rgba(0, 240, 255, 0.7);
+  }
+}
+
+/* Pilot Intel Box */
+.pilot-intel-box {
+  background: rgba(6, 8, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.intel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.intel-lbl {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.intel-val {
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: #ffffff;
+}
+
+.text-green { color: #22c55e; }
+.text-cyan { color: #00f0ff; }
+.text-slate { color: #94a3b8; }
+
+/* Flight Controls & Settings Guide in Submenus */
+.controls-guide-body {
+  max-height: 270px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-right: 4px;
+}
+
+.controls-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #00f0ff;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.settings-guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(6, 8, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 9px 12px;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+.settings-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.settings-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffffff;
+}
+
+.settings-desc {
+  font-size: 10px;
+  color: #94a3b8;
 }
 
 /* Pilot Profile Header & Status */
@@ -3313,8 +3839,8 @@ body.touch-device .hud-radar-card {
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
+    align-items: stretch;
+    padding: 6px 10px;
     overflow: hidden;
   }
 
@@ -3324,61 +3850,203 @@ body.touch-device .hud-radar-card {
     display: none !important;
   }
 
-  .menu-left-panel {
-    width: clamp(205px, 27vw, 245px);
-    max-width: 250px;
-    max-height: calc(100vh - 16px);
-    display: block;
-    flex-shrink: 0;
+  /* Left Viewport & Watermark */
+  .menu-left-viewport {
+    flex: 1 1 auto !important;
+    height: 100% !important;
   }
 
+  .vessel-watermark-overlay {
+    bottom: 8px !important;
+    left: 8px !important;
+    padding: 6px 10px !important;
+    gap: 2px !important;
+  }
+
+  .watermark-badge {
+    font-size: 7.5px !important;
+  }
+
+  .watermark-counter {
+    font-size: 8px !important;
+  }
+
+  .watermark-ship-name {
+    font-size: 13px !important;
+  }
+
+  .watermark-stats-line {
+    font-size: 9px !important;
+    gap: 4px !important;
+  }
+
+  .watermark-hint {
+    display: none !important;
+  }
+
+  /* Right Menu Panel */
   .menu-right-panel {
-    width: clamp(215px, 28vw, 255px);
-    max-width: 260px;
-    max-height: calc(100vh - 16px);
-    display: block;
-    flex-shrink: 0;
+    width: clamp(260px, 46vw, 340px) !important;
+    max-width: 350px !important;
+    max-height: calc(100vh - 12px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    padding: 0 !important;
   }
 
   .arcade-card {
-    background: linear-gradient(180deg, rgba(8, 12, 22, 0.84) 0%, rgba(5, 7, 14, 0.9) 100%) !important;
+    background: linear-gradient(180deg, rgba(8, 12, 22, 0.88) 0%, rgba(5, 7, 14, 0.94) 100%) !important;
     backdrop-filter: blur(14px) !important;
     -webkit-backdrop-filter: blur(14px) !important;
     border: 1px solid rgba(0, 240, 255, 0.28) !important;
-    padding: 6px 9px !important;
-    gap: 4px !important;
+    padding: 8px 10px !important;
+    gap: 5px !important;
+    max-height: calc(100vh - 12px) !important;
+    overflow-y: auto !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 14px rgba(0, 240, 255, 0.08) !important;
   }
 
   .main-nav-card {
-    border-color: rgba(255, 0, 128, 0.32) !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65), 0 0 14px rgba(255, 0, 128, 0.08) !important;
+    border-color: rgba(0, 240, 255, 0.3) !important;
   }
 
-  .panel-header-badge-row {
-    margin-bottom: 0px !important;
+  /* Menu Title Block */
+  .menu-title-block {
+    gap: 2px !important;
+    padding-bottom: 4px !important;
   }
 
-  .hangar-badge {
-    font-size: 8.5px !important;
+  .title-logo-tag {
+    font-size: 7.5px !important;
     letter-spacing: 1px !important;
-    padding: 2px 6px !important;
   }
 
-  .ship-counter-badge {
-    font-size: 9px !important;
+  .title-logo-text {
+    font-size: 20px !important;
+    letter-spacing: 3px !important;
+  }
+
+  .title-meta-bar {
+    margin-top: 0 !important;
+  }
+
+  .meta-status-pill,
+  .meta-pilot-input-wrap {
     padding: 2px 5px !important;
+    font-size: 8.5px !important;
+  }
+
+  .pilot-tag-input {
+    font-size: 9.5px !important;
+    width: 65px !important;
+  }
+
+  .pilot-tag-label {
+    font-size: 8.5px !important;
+  }
+
+  /* Step Subnav Header */
+  .subnav-header {
+    padding-bottom: 4px !important;
+  }
+
+  .subnav-step-badge {
+    font-size: 7.5px !important;
+  }
+
+  .subnav-title {
+    font-size: 11px !important;
+  }
+
+  .btn-subnav-back {
+    padding: 3px 7px !important;
+    font-size: 9.5px !important;
+  }
+
+  /* Navigation Buttons */
+  .nav-options-stack {
+    gap: 4px !important;
+  }
+
+  .arcade-btn {
+    padding: 5px 8px !important;
+    font-size: 10px !important;
     letter-spacing: 0.8px !important;
   }
 
+  .arcade-btn-icon {
+    width: 16px !important;
+    height: 16px !important;
+    margin-right: 5px !important;
+  }
+
+  .arcade-btn-icon svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  /* Mode Selection Cards */
+  .step-card-btn {
+    padding: 6px 8px !important;
+    gap: 8px !important;
+  }
+
+  .step-card-icon-wrap {
+    width: 28px !important;
+    height: 28px !important;
+  }
+
+  .step-card-icon-wrap svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .step-card-title {
+    font-size: 10.5px !important;
+  }
+
+  .step-card-tag {
+    font-size: 7.5px !important;
+    padding: 1px 4px !important;
+  }
+
+  .step-card-desc {
+    font-size: 9px !important;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Sector Preview Hero */
+  .sector-preview-hero {
+    padding: 5px 7px !important;
+  }
+
+  .sector-hero-name {
+    font-size: 12px !important;
+  }
+
+  .sector-hero-desc {
+    font-size: 9px !important;
+  }
+
+  .arcade-btn-launch {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+  }
+
+  /* Ship Stepper */
   .ship-selector-hero {
-    padding: 4px 6px !important;
-    gap: 6px !important;
+    padding: 3px 5px !important;
+    gap: 5px !important;
   }
 
   .arcade-stepper-btn {
-    width: 26px !important;
-    height: 26px !important;
+    width: 24px !important;
+    height: 24px !important;
   }
 
   .arcade-stepper-btn svg {
@@ -3386,26 +4054,19 @@ body.touch-device .hud-radar-card {
     height: 12px !important;
   }
 
-  .ship-hero-info {
-    min-width: 70px !important;
-    padding: 0 2px !important;
-  }
-
   .ship-hero-info .ship-title-text {
-    font-size: 12px !important;
-    line-height: 1.15 !important;
-    letter-spacing: 0.3px !important;
+    font-size: 11px !important;
   }
 
-  .ship-hero-info .ship-class-badge {
-    font-size: 7.5px !important;
-    padding: 1px 3px !important;
-    margin-top: 1px !important;
+  .ship-counter-badge {
+    font-size: 8px !important;
+    padding: 1px 4px !important;
   }
 
+  /* Ship Specs */
   .ship-specs-container {
     padding: 4px 6px !important;
-    gap: 3px !important;
+    gap: 2px !important;
   }
 
   .spec-row {
@@ -3413,11 +4074,11 @@ body.touch-device .hud-radar-card {
   }
 
   .spec-header {
-    font-size: 8.5px !important;
+    font-size: 8px !important;
   }
 
   .spec-track {
-    height: 4px !important;
+    height: 3.5px !important;
   }
 
   .panel-section {
@@ -3425,7 +4086,7 @@ body.touch-device .hud-radar-card {
   }
 
   .panel-section-label {
-    font-size: 8.5px !important;
+    font-size: 8px !important;
     letter-spacing: 0.8px !important;
   }
 
@@ -3440,7 +4101,7 @@ body.touch-device .hud-radar-card {
     border-width: 1.5px !important;
   }
 
-  /* Right Navigation Panel adjustments */
+  /* Pilot and Controls & Settings Guide */
   .pilot-profile-card {
     padding: 4px 6px !important;
   }
@@ -3468,19 +4129,33 @@ body.touch-device .hud-radar-card {
     font-size: 11px !important;
   }
 
-  .menu-skybox-section {
-    padding: 4px 6px !important;
-    gap: 3px !important;
+  .controls-guide-body {
+    max-height: 130px !important;
   }
 
-  .menu-skybox-title {
-    font-size: 8.5px !important;
-    letter-spacing: 1px !important;
+  .control-key-item {
+    padding: 2px 4px !important;
   }
 
-  .menu-skybox-badge {
-    font-size: 7.5px !important;
+  .control-key-badge {
+    font-size: 8px !important;
     padding: 1px 3px !important;
+  }
+
+  .control-key-desc {
+    font-size: 8.5px !important;
+  }
+
+  .settings-action-row {
+    padding: 4px 6px !important;
+  }
+
+  .settings-title {
+    font-size: 10px !important;
+  }
+
+  .settings-desc {
+    font-size: 8.5px !important;
   }
 
   .menu-skybox-grid {
@@ -3496,27 +4171,6 @@ body.touch-device .hud-radar-card {
   .menu-skybox-dot {
     width: 4px !important;
     height: 4px !important;
-  }
-
-  .nav-options-stack {
-    gap: 4px !important;
-  }
-
-  .arcade-btn {
-    padding: 5px 8px !important;
-    font-size: 10px !important;
-    letter-spacing: 0.8px !important;
-  }
-
-  .arcade-btn-icon {
-    width: 16px !important;
-    height: 16px !important;
-    margin-right: 5px !important;
-  }
-
-  .arcade-btn-icon svg {
-    width: 12px !important;
-    height: 12px !important;
   }
 
   .options-toggle-btn {
