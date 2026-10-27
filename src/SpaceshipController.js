@@ -488,12 +488,12 @@ export class SpaceshipController {
   updateCrosshairAim() {
     if (!this.crosshairContainer || this.cameraMode === 2) return;
 
-    // Check remote enemy players in aim cone first
+    // Check remote enemy players in aim cone first (using predictive lead point when moving)
     if (this.remotePlayersManager) {
-      const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.16);
+      const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.20);
       if (enemyTarget && enemyTarget.player) {
         this.crosshairContainer.classList.add('target-locked');
-        this.aimTargetPoint = enemyTarget.player.root.position.clone();
+        this.aimTargetPoint = (enemyTarget.aimPoint || enemyTarget.leadPoint || enemyTarget.player.root.position).clone();
         return;
       }
     }

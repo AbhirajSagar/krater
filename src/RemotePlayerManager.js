@@ -276,7 +276,8 @@ export class RemotePlayerManager {
   }
 
   /**
-   * Acquires the best enemy target in line-of-sight / crosshair cone
+   * Acquires the best enemy target in line-of-sight / crosshair cone,
+   * checking both direct ship position and predictive lead impact point.
    * @param {THREE.PerspectiveCamera} camera
    * @param {number} maxScreenDist Normalized distance from screen center (0..1)
    */
@@ -285,25 +286,39 @@ export class RemotePlayerManager {
     let minDistance = Infinity;
 
     const screenPos = new THREE.Vector3();
+    const leadWorld = new THREE.Vector3();
+    const leadScreenPos = new THREE.Vector3();
+    const camSpace = new THREE.Vector3();
 
     for (const player of this.players.values()) {
       if (player.isDestroyed || !player.root.visible) continue;
 
+      camSpace.copy(player.root.position).applyMatrix4(camera.matrixWorldInverse);
+      if (camSpace.z >= -0.1) continue; // Behind camera
+
       screenPos.copy(player.root.position).project(camera);
+      const shipScreenDist = Math.hypot(screenPos.x, screenPos.y);
 
-      // Must be in front of camera
-      if (screenPos.z < 0 || screenPos.z > 1) continue;
+      // Predictive lead calculation (lasers travel at 160 m/s)
+      const worldDist = player.root.position.distanceTo(camera.position);
+      const tLead = worldDist / 160.0;
+      leadWorld.copy(player.root.position).addScaledVector(player.velocity, tLead);
 
-      const screenDist = Math.hypot(screenPos.x, screenPos.y);
-      if (screenDist <= maxScreenDist) {
-        const worldDist = player.root.position.distanceTo(camera.position);
+      leadScreenPos.copy(leadWorld).project(camera);
+      const leadScreenDist = Math.hypot(leadScreenPos.x, leadScreenPos.y);
+
+      const effectiveScreenDist = Math.min(shipScreenDist, leadScreenDist);
+      if (effectiveScreenDist <= maxScreenDist) {
         if (worldDist < minDistance) {
           minDistance = worldDist;
+          const preferLead = leadScreenDist <= shipScreenDist && player.velocity.length() > 1.2;
           bestTarget = {
             player,
-            screenX: screenPos.x,
-            screenY: screenPos.y,
-            worldDistance: worldDist
+            screenX: preferLead ? leadScreenPos.x : screenPos.x,
+            screenY: preferLead ? leadScreenPos.y : screenPos.y,
+            worldDistance: worldDist,
+            leadPoint: leadWorld.clone(),
+            aimPoint: preferLead ? leadWorld.clone() : player.root.position.clone()
           };
         }
       }

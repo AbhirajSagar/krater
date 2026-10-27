@@ -312,7 +312,7 @@ function startBattle(room = null, isSolo = false) {
   currentGameState = 'BATTLE';
   if (optionsMenu) optionsMenu.setInBattle(true);
   if (lobbyUI) lobbyUI.hideAll();
-  if (combatHUD) combatHUD.hide();
+  if (combatHUD) combatHUD.show();
 
   // Keep the exact same skybox that is currently displayed in the menu for gameplay
 
@@ -398,6 +398,21 @@ function startBattle(room = null, isSolo = false) {
     if (asteroidField && mapManager?.currentMap?.asteroids?.enabled !== false) {
       asteroidField.reseed('spacegame_solo_sector', mapManager?.currentMap?.asteroids || {});
     }
+    if (remotePlayersManager) {
+      remotePlayersManager.clear();
+      remotePlayersManager.addPlayer({
+        id: 'solo_target_drone',
+        name: 'ROGUE DRONE',
+        state: {
+          shipIndex: 1,
+          themeKey: 'Red',
+          position: [0, 4, -85],
+          health: 100,
+          shield: 100,
+          isDestroyed: false
+        }
+      });
+    }
   }
 }
 
@@ -419,6 +434,7 @@ function syncScoreboard() {
 // 6. Main Render & Simulation Loop (Runs immediately so no black screen can occur)
 const clock = new THREE.Clock();
 let menuFloatTime = 0;
+let soloDroneTime = 0;
 let lastTransformSync = 0;
 
 function animate() {
@@ -446,6 +462,25 @@ function animate() {
 
   // Update Remote Opponents & check incoming laser hits
   if (remotePlayersManager) {
+    if (currentGameState === 'BATTLE' && (!client || !client.room)) {
+      const drone = remotePlayersManager.getPlayer('solo_target_drone');
+      if (drone && !drone.isDestroyed) {
+        soloDroneTime += dt;
+        const rad = 75;
+        const ang = soloDroneTime * 0.25;
+        const tx = Math.cos(ang) * rad;
+        const ty = Math.sin(soloDroneTime * 0.45) * 16;
+        const tz = Math.sin(ang) * rad;
+        const vx = -Math.sin(ang) * rad * 0.25;
+        const vy = Math.cos(soloDroneTime * 0.45) * 16 * 0.45;
+        const vz = Math.cos(ang) * rad * 0.25;
+        drone.targetPosition.set(tx, ty, tz);
+        drone.velocity.set(vx, vy, vz);
+        drone.targetSpeed = Math.hypot(vx, vy, vz);
+        const fwd = new THREE.Vector3(vx, vy, vz).normalize();
+        drone.targetQuaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), fwd);
+      }
+    }
     remotePlayersManager.update(dt, camera, spaceship);
   }
 
@@ -738,6 +773,21 @@ function bindNetworkEvents() {
         if (newHealth <= 0 && !enemyPlayer.isDestroyed) {
           if (remotePlayersManager) {
             remotePlayersManager.handlePlayerKilled(enemyPlayer.id);
+          }
+          if (enemyPlayer.id === 'solo_target_drone') {
+            localKills += 1;
+            localScore += 100;
+            if (combatHUD) {
+              combatHUD.addKillFeedEntry(lobbyUI ? lobbyUI.callsign : 'Pilot', enemyPlayer.name, true, false);
+              combatHUD.showCombatBanner('ROGUE DRONE ELIMINATED (+100)');
+            }
+            setTimeout(() => {
+              if (currentGameState === 'BATTLE' && (!client || !client.room) && remotePlayersManager) {
+                const ang = Math.random() * Math.PI * 2;
+                const r = 70 + Math.random() * 20;
+                remotePlayersManager.handlePlayerRespawned(enemyPlayer.id, [Math.cos(ang) * r, 4, Math.sin(ang) * r]);
+              }
+            }, 3500);
           }
         }
       }

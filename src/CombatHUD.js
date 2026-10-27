@@ -41,6 +41,10 @@ export class CombatHUD {
 
     this._scratchVec = new THREE.Vector3();
     this._screenVec = new THREE.Vector3();
+    this._camSpaceVec = new THREE.Vector3();
+    this._leadScratchVec = new THREE.Vector3();
+    this._leadScreenVec = new THREE.Vector3();
+    this._leadCamSpaceVec = new THREE.Vector3();
 
     this.initDOM();
     this.setupListeners();
@@ -254,6 +258,7 @@ export class CombatHUD {
 
     this.inViewContainer = document.getElementById('hud-world-targets');
     this.targetBracketsMap = new Map();
+    this.leadPipsMap = new Map();
     this.offscreenArrowsMap = new Map();
 
     this.offscreenContainer = document.getElementById('hud-offscreen-indicators');
@@ -377,6 +382,22 @@ export class CombatHUD {
 
   hide() {
     this.container.classList.remove('visible');
+    this.clearTargets();
+  }
+
+  clearTargets() {
+    if (this.targetBracketsMap) {
+      for (const b of this.targetBracketsMap.values()) b.el.remove();
+      this.targetBracketsMap.clear();
+    }
+    if (this.leadPipsMap) {
+      for (const lp of this.leadPipsMap.values()) lp.el.remove();
+      this.leadPipsMap.clear();
+    }
+    if (this.offscreenArrowsMap) {
+      for (const a of this.offscreenArrowsMap.values()) a.el.remove();
+      this.offscreenArrowsMap.clear();
+    }
   }
 
   setRoomInfo(roomCode) {
@@ -593,14 +614,18 @@ export class CombatHUD {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const margin = 38;
+    const margin = Math.max(34, Math.min(w, h) * 0.05);
     const halfW = (w / 2) - margin;
     const halfH = (h / 2) - margin;
+    const cx = w / 2;
+    const cy = h / 2;
 
     for (const p of players) {
       if (p.isDestroyed || !p.root.visible) {
         const b = this.targetBracketsMap.get(p.id);
         if (b) b.el.style.display = 'none';
+        const lp = this.leadPipsMap.get(p.id);
+        if (lp) lp.el.style.display = 'none';
         const a = this.offscreenArrowsMap.get(p.id);
         if (a) a.el.style.display = 'none';
         continue;
@@ -608,24 +633,37 @@ export class CombatHUD {
 
       activePlayerIds.add(p.id);
 
-      this._scratchVec.copy(p.root.position);
-      this._screenVec.copy(this._scratchVec).project(camera);
+      // Camera local space position of the enemy ship
+      this._camSpaceVec.copy(p.root.position).applyMatrix4(camera.matrixWorldInverse);
+      const camX = this._camSpaceVec.x;
+      const camY = this._camSpaceVec.y;
+      const camZ = this._camSpaceVec.z;
 
+      // Distance in meters
       const dist = Math.round(localShipPos.distanceTo(p.root.position));
-      const isInFront = this._screenVec.z >= 0 && this._screenVec.z <= 1;
-      const isInView = isInFront && Math.abs(this._screenVec.x) <= 0.94 && Math.abs(this._screenVec.y) <= 0.94;
+
+      // In Three.js camera space, points in front of the lens have z < -0.1
+      const isInFront = camZ < -0.1;
+
+      // Project enemy world pos to 2D screen coordinates
+      this._screenVec.copy(p.root.position).project(camera);
+      const sx = (this._screenVec.x * 0.5 + 0.5) * w;
+      const sy = (-this._screenVec.y * 0.5 + 0.5) * h;
+
+      const isInView = isInFront && (sx >= margin && sx <= (w - margin) && sy >= margin && sy <= (h - margin));
 
       if (isInView) {
         // Hide off-screen arrow
         const arrow = this.offscreenArrowsMap.get(p.id);
         if (arrow) arrow.el.style.display = 'none';
 
-        // Show in-view bracket
+        // --- IN-VIEW TARGET BRACKET ---
         let bracket = this.targetBracketsMap.get(p.id);
         if (!bracket) {
           const el = document.createElement('div');
           el.className = 'inview-target-bracket';
           el.innerHTML = `
+            <div class="bracket-lead-vector"></div>
             <div class="bracket-reticle">
               <span class="corner-tick tick-tl"></span>
               <span class="corner-tick tick-tr"></span>
@@ -635,6 +673,7 @@ export class CombatHUD {
             </div>
             <div class="bracket-meta">
               <div class="bracket-header">
+                <span class="hostile-tag">ENEMY</span>
                 <span class="bracket-callsign"></span>
                 <span class="bracket-dist"></span>
               </div>
@@ -642,23 +681,95 @@ export class CombatHUD {
                 <div class="mini-bar-track shield-track"><div class="mini-bar-fill shield-fill"></div></div>
                 <div class="mini-bar-track hull-track"><div class="mini-bar-fill hull-fill"></div></div>
               </div>
+              <div class="bracket-status-lock hidden">LOCKED</div>
             </div>
           `;
           this.inViewContainer.appendChild(el);
           bracket = {
             el,
+            leadLineEl: el.querySelector('.bracket-lead-vector'),
             callsignEl: el.querySelector('.bracket-callsign'),
             distEl: el.querySelector('.bracket-dist'),
             shieldFill: el.querySelector('.shield-fill'),
             hullFill: el.querySelector('.hull-fill'),
+            statusLockEl: el.querySelector('.bracket-status-lock'),
           };
           this.targetBracketsMap.set(p.id, bracket);
         }
 
-        const sx = (this._screenVec.x * 0.5 + 0.5) * w;
-        const sy = (-this._screenVec.y * 0.5 + 0.5) * h;
-        const screenDist = Math.hypot(this._screenVec.x, this._screenVec.y);
-        const isLocked = screenDist <= 0.18;
+        // --- PREDICTIVE LEAD INDICATOR (LEAD PIP) ---
+        // Laser speed = 160.0 m/s
+        const tLead = dist / 160.0;
+        this._leadScratchVec.copy(p.root.position).addScaledVector(p.velocity, tLead);
+        this._leadCamSpaceVec.copy(this._leadScratchVec).applyMatrix4(camera.matrixWorldInverse);
+        const leadIsInFront = this._leadCamSpaceVec.z < -0.1;
+
+        let leadPip = this.leadPipsMap.get(p.id);
+        if (!leadPip) {
+          const el = document.createElement('div');
+          el.className = 'lead-pip-container';
+          el.innerHTML = `
+            <div class="lead-pip-reticle">
+              <div class="lead-pip-ring"></div>
+              <div class="lead-pip-dot"></div>
+              <span class="lead-tick l-top"></span>
+              <span class="lead-tick l-bottom"></span>
+              <span class="lead-tick l-left"></span>
+              <span class="lead-tick l-right"></span>
+            </div>
+            <div class="lead-pip-tag">LEAD</div>
+          `;
+          this.inViewContainer.appendChild(el);
+          leadPip = {
+            el,
+            reticleEl: el.querySelector('.lead-pip-reticle'),
+            tagEl: el.querySelector('.lead-pip-tag')
+          };
+          this.leadPipsMap.set(p.id, leadPip);
+        }
+
+        let isLocked = false;
+        const enemySpeed = p.velocity ? p.velocity.length() : (p.currentSpeed || 0);
+        const isMoving = enemySpeed > 1.2;
+
+        if (leadIsInFront && isMoving) {
+          this._leadScreenVec.copy(this._leadScratchVec).project(camera);
+          const leadSx = (this._leadScreenVec.x * 0.5 + 0.5) * w;
+          const leadSy = (-this._leadScreenVec.y * 0.5 + 0.5) * h;
+
+          leadPip.el.style.left = `${leadSx.toFixed(1)}px`;
+          leadPip.el.style.top = `${leadSy.toFixed(1)}px`;
+          leadPip.el.style.display = 'flex';
+
+          // Trajectory vector line connecting bracket center to lead pip
+          const dx = leadSx - sx;
+          const dy = leadSy - sy;
+          const lineDist = Math.hypot(dx, dy);
+          if (lineDist > 14) {
+            const lineAngle = Math.atan2(dy, dx);
+            bracket.leadLineEl.style.width = `${lineDist.toFixed(1)}px`;
+            bracket.leadLineEl.style.transform = `rotate(${lineAngle}rad)`;
+            bracket.leadLineEl.style.display = 'block';
+          } else {
+            bracket.leadLineEl.style.display = 'none';
+          }
+
+          // Check crosshair lock proximity to lead pip or enemy
+          const leadDistToCenter = Math.hypot(leadSx - cx, leadSy - cy);
+          const shipDistToCenter = Math.hypot(sx - cx, sy - cy);
+          isLocked = (leadDistToCenter < 42) || (shipDistToCenter < 38);
+
+          if (isLocked) {
+            leadPip.el.classList.add('is-locked');
+          } else {
+            leadPip.el.classList.remove('is-locked');
+          }
+        } else {
+          leadPip.el.style.display = 'none';
+          bracket.leadLineEl.style.display = 'none';
+          const shipDistToCenter = Math.hypot(sx - cx, sy - cy);
+          isLocked = shipDistToCenter < 38;
+        }
 
         const sPct = Math.max(0, Math.min(100, Math.round((p.shield / (p.maxShield || 100)) * 100)));
         const hPct = Math.max(0, Math.min(100, Math.round((p.health / (p.maxHealth || 100)) * 100)));
@@ -675,22 +786,26 @@ export class CombatHUD {
 
         if (isLocked) {
           bracket.el.classList.add('is-locked');
+          if (bracket.statusLockEl) bracket.statusLockEl.classList.remove('hidden');
         } else {
           bracket.el.classList.remove('is-locked');
+          if (bracket.statusLockEl) bracket.statusLockEl.classList.add('hidden');
         }
 
-        const scale = THREE.MathUtils.clamp(1.15 - (dist / 650) * 0.35, 0.72, 1.25);
+        const scale = THREE.MathUtils.clamp(1.15 - (dist / 700) * 0.40, 0.72, 1.25);
         bracket.el.style.left = `${sx.toFixed(1)}px`;
         bracket.el.style.top = `${sy.toFixed(1)}px`;
         bracket.el.style.transform = `translate(-50%, -50%) scale(${scale.toFixed(2)})`;
         bracket.el.style.display = 'flex';
 
       } else {
-        // Hide in-view bracket
+        // Hide in-view bracket and lead pip
         const bracket = this.targetBracketsMap.get(p.id);
         if (bracket) bracket.el.style.display = 'none';
+        const leadPip = this.leadPipsMap.get(p.id);
+        if (leadPip) leadPip.el.style.display = 'none';
 
-        // Show off-screen indicator
+        // Show off-screen directional indicator
         let arrow = this.offscreenArrowsMap.get(p.id);
         if (!arrow) {
           const el = document.createElement('div');
@@ -708,38 +823,51 @@ export class CombatHUD {
           this.offscreenArrowsMap.set(p.id, arrow);
         }
 
-        let nx = this._screenVec.x;
-        let ny = this._screenVec.y;
-        if (!isInFront) {
-          nx = -nx;
-          ny = -ny;
+        // Direction in screen pixel coordinates
+        let dirX = camX;
+        let dirY = -camY;
+        const isBehind = camZ >= -0.1;
+        if (isBehind) {
+          if (Math.hypot(dirX, dirY) < 0.05) {
+            dirX = 0;
+            dirY = 1;
+          }
         }
-        if (Math.abs(nx) < 0.0001 && Math.abs(ny) < 0.0001) {
-          nx = 0; ny = 1;
+        const len = Math.hypot(dirX, dirY);
+        if (len > 0.0001) {
+          dirX /= len;
+          dirY /= len;
+        } else {
+          dirX = 0;
+          dirY = 1;
         }
 
-        const angle = Math.atan2(ny, nx);
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
-
+        const angle = Math.atan2(dirY, dirX);
         const edgeScale = Math.min(
-          Math.abs(halfW / (cos || 0.0001)),
-          Math.abs(halfH / (sin || 0.0001))
+          Math.abs(halfW / (dirX || 0.0001)),
+          Math.abs(halfH / (dirY || 0.0001))
         );
 
-        const edgeX = THREE.MathUtils.clamp((w / 2) + cos * edgeScale, margin, w - margin);
-        const edgeY = THREE.MathUtils.clamp((h / 2) - sin * edgeScale, margin, h - margin);
-        const rotDeg = (-angle * 180 / Math.PI) + 90;
+        const edgeX = THREE.MathUtils.clamp(cx + dirX * edgeScale, margin, w - margin);
+        const edgeY = THREE.MathUtils.clamp(cy + dirY * edgeScale, margin, h - margin);
+        const rotDeg = (angle * 180 / Math.PI) + 90;
 
-        arrow.textEl.textContent = `${p.name} · ${dist}m`;
         arrow.shapeEl.style.transform = `rotate(${rotDeg.toFixed(1)}deg)`;
         arrow.el.style.left = `${edgeX.toFixed(1)}px`;
         arrow.el.style.top = `${edgeY.toFixed(1)}px`;
 
-        if (dist < 160) {
+        if (isBehind && dist < 220) {
+          arrow.el.classList.add('is-behind');
           arrow.el.classList.add('is-danger');
+          arrow.textEl.textContent = `⚠️ BEHIND · ${dist}m`;
+        } else if (dist < 150) {
+          arrow.el.classList.remove('is-behind');
+          arrow.el.classList.add('is-danger');
+          arrow.textEl.textContent = `HOSTILE · ${dist}m`;
         } else {
+          arrow.el.classList.remove('is-behind');
           arrow.el.classList.remove('is-danger');
+          arrow.textEl.textContent = `${p.name} · ${dist}m`;
         }
 
         arrow.el.style.display = 'flex';
@@ -751,6 +879,12 @@ export class CombatHUD {
       if (!activePlayerIds.has(id)) {
         b.el.remove();
         this.targetBracketsMap.delete(id);
+      }
+    }
+    for (const [id, lp] of this.leadPipsMap.entries()) {
+      if (!activePlayerIds.has(id)) {
+        lp.el.remove();
+        this.leadPipsMap.delete(id);
       }
     }
     for (const [id, a] of this.offscreenArrowsMap.entries()) {
