@@ -11,6 +11,11 @@ import { ThrusterFlame, ThrusterSparkSystem } from './ThrusterVFX.js';
 import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
 import { createStarSparrowMaterial, SPARROW_THEMES } from './StarSparrowMaterial.js';
 
+// Static scratch objects to eliminate per-frame GC allocations
+const _shipQuat = new THREE.Quaternion();
+const _shipDir = new THREE.Vector3();
+const _worldPos = new THREE.Vector3();
+
 export class RemotePlayer {
   /**
    * @param {THREE.Scene} scene
@@ -309,17 +314,17 @@ export class RemotePlayer {
       this.currentMaterial.updateFlightVFX(dt, this.isBoosting, throttleVal);
     }
 
-    const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
-    const shipDir = new THREE.Vector3(0, 0, -1).applyQuaternion(shipWorldQuat);
+    this.visualHolder.getWorldQuaternion(_shipQuat);
+    _shipDir.set(0, 0, -1).applyQuaternion(_shipQuat);
     const shouldSpawnSparks = (this.currentSpeed > 3.0 || this.isBoosting) && Math.random() < (this.isBoosting ? 0.75 : 0.35);
 
     for (const thruster of this.activeThrusters) {
       thruster.update(dt, targetThrottle, this.isBoosting);
 
       if (shouldSpawnSparks && this.sparkSystem) {
-        const worldPos = new THREE.Vector3();
-        thruster.root.getWorldPosition(worldPos);
-        this.sparkSystem.spawnSparks(worldPos, shipDir, this.isBoosting);
+        // Reuse scratch vector
+        thruster.root.getWorldPosition(_worldPos);
+        this.sparkSystem.spawnSparks(_worldPos, _shipDir, this.isBoosting);
       }
     }
 

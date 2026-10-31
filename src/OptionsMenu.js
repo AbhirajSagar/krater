@@ -11,15 +11,23 @@ export class OptionsMenu {
     this.spaceship = options.spaceship || null;
     this.onLeaveMatch = options.onLeaveMatch || null;
     this.onToggleDevStats = options.onToggleDevStats || null;
+    this.onGraphicsChange = options.onGraphicsChange || null;
     this.isOpen = false;
     this.canControl = false;
     this.inBattle = false;
 
     // Disabled by default per user specification
     this.devStatsEnabled = false;
+    this.graphicsPreset = 'high'; // 'high', 'balanced', 'performance'
+    this.shadowsEnabled = true;
+
     try {
       if (typeof localStorage !== 'undefined') {
         this.devStatsEnabled = localStorage.getItem('spacegame_dev_stats') === 'true';
+        const savedPreset = localStorage.getItem('spacegame_graphics_preset');
+        if (savedPreset) this.graphicsPreset = savedPreset;
+        const savedShadows = localStorage.getItem('spacegame_shadows');
+        if (savedShadows !== null) this.shadowsEnabled = savedShadows === 'true';
       }
     } catch {
       this.devStatsEnabled = false;
@@ -29,6 +37,7 @@ export class OptionsMenu {
     this.setupListeners();
     this.updateFullscreenUI();
     this.updateDevStatsUI();
+    this.updateGraphicsUI();
   }
 
   setSpaceship(spaceship) {
@@ -115,6 +124,29 @@ export class OptionsMenu {
               </button>
             </div>
 
+            <!-- Graphics Quality Setting Row -->
+            <div class="option-row">
+              <div class="option-info">
+                <span class="option-label">Graphics Quality</span>
+                <span class="option-desc" id="desc-graphics-preset">Balanced resolution & smooth framerate</span>
+              </div>
+              <button id="btn-graphics-toggle" class="glass-btn-sm" aria-label="Toggle Graphics Quality">
+                <span id="label-graphics-preset">HIGH</span>
+              </button>
+            </div>
+
+            <!-- Dynamic Shadows Setting Row -->
+            <div class="option-row">
+              <div class="option-info">
+                <span class="option-label">Sunlight Shadows</span>
+                <span class="option-desc">Dynamic ship & asteroid shadow projection</span>
+              </div>
+              <button id="btn-shadows-toggle" class="glass-btn-sm" aria-label="Toggle Sunlight Shadows">
+                <span class="dev-toggle-dot" id="shadows-toggle-dot"></span>
+                <span id="label-shadows">ON</span>
+              </button>
+            </div>
+
             <!-- Stats for Nerds / Developer Telemetry Row (Gameplay only) -->
             <div id="option-row-dev-stats" class="option-row hidden">
               <div class="option-info">
@@ -153,6 +185,12 @@ export class OptionsMenu {
     this.iconEnterFullscreen = document.getElementById('icon-enter-fullscreen');
     this.iconExitFullscreen = document.getElementById('icon-exit-fullscreen');
     this.labelFullscreen = document.getElementById('label-fullscreen');
+    this.graphicsBtn = document.getElementById('btn-graphics-toggle');
+    this.labelGraphics = document.getElementById('label-graphics-preset');
+    this.descGraphics = document.getElementById('desc-graphics-preset');
+    this.shadowsBtn = document.getElementById('btn-shadows-toggle');
+    this.shadowsToggleDot = document.getElementById('shadows-toggle-dot');
+    this.labelShadows = document.getElementById('label-shadows');
     this.devStatsBtn = document.getElementById('btn-dev-stats-toggle');
     this.devToggleDot = document.getElementById('dev-toggle-dot');
     this.labelDevStats = document.getElementById('label-dev-stats');
@@ -192,6 +230,18 @@ export class OptionsMenu {
     this.fullscreenBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleFullscreen();
+    });
+
+    // Graphics preset toggle button action
+    this.graphicsBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.cycleGraphicsPreset();
+    });
+
+    // Shadows toggle button action
+    this.shadowsBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleShadows();
     });
 
     // Dev stats toggle button action
@@ -371,6 +421,104 @@ export class OptionsMenu {
 
     if (this.labelDevStats) {
       this.labelDevStats.textContent = this.devStatsEnabled ? 'ON' : 'OFF';
+    }
+  }
+
+  cycleGraphicsPreset() {
+    const cycle = {
+      high: 'balanced',
+      balanced: 'performance',
+      performance: 'high'
+    };
+    this.graphicsPreset = cycle[this.graphicsPreset] || 'high';
+
+    if (this.graphicsPreset === 'performance') {
+      this.shadowsEnabled = false;
+    } else if (this.graphicsPreset === 'high') {
+      this.shadowsEnabled = true;
+    }
+
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_graphics_preset', this.graphicsPreset);
+        localStorage.setItem('spacegame_shadows', String(this.shadowsEnabled));
+      }
+    } catch {
+      // ignore
+    }
+
+    this.updateGraphicsUI();
+    this.emitGraphicsChange();
+  }
+
+  toggleShadows() {
+    this.shadowsEnabled = !this.shadowsEnabled;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_shadows', String(this.shadowsEnabled));
+      }
+    } catch {
+      // ignore
+    }
+    this.updateGraphicsUI();
+    this.emitGraphicsChange();
+  }
+
+  getGraphicsConfig() {
+    let pixelRatioCap = 1.5;
+    if (this.graphicsPreset === 'balanced') pixelRatioCap = 1.25;
+    if (this.graphicsPreset === 'performance') pixelRatioCap = 1.0;
+
+    return {
+      preset: this.graphicsPreset,
+      pixelRatioCap,
+      shadowsEnabled: this.shadowsEnabled
+    };
+  }
+
+  emitGraphicsChange() {
+    if (this.onGraphicsChange) {
+      this.onGraphicsChange(this.getGraphicsConfig());
+    }
+  }
+
+  updateGraphicsUI() {
+    if (this.labelGraphics) {
+      const labels = {
+        high: 'HIGH',
+        balanced: 'BALANCED',
+        performance: 'FAST'
+      };
+      this.labelGraphics.textContent = labels[this.graphicsPreset] || 'HIGH';
+    }
+
+    if (this.descGraphics) {
+      const descriptions = {
+        high: 'Native/1.5x resolution · Peak fidelity',
+        balanced: '1.25x resolution · Butter-smooth flight',
+        performance: '1.0x resolution · Maximum framerate'
+      };
+      this.descGraphics.textContent = descriptions[this.graphicsPreset] || '';
+    }
+
+    if (this.shadowsBtn) {
+      if (this.shadowsEnabled) {
+        this.shadowsBtn.classList.add('active');
+      } else {
+        this.shadowsBtn.classList.remove('active');
+      }
+    }
+
+    if (this.shadowsToggleDot) {
+      if (this.shadowsEnabled) {
+        this.shadowsToggleDot.classList.add('on');
+      } else {
+        this.shadowsToggleDot.classList.remove('on');
+      }
+    }
+
+    if (this.labelShadows) {
+      this.labelShadows.textContent = this.shadowsEnabled ? 'ON' : 'OFF';
     }
   }
 }

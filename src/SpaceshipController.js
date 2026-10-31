@@ -5,9 +5,21 @@ import { SPACESHIP_CONFIGS, getSpaceshipConfig } from './spaceshipConfig.js';
 import { ThrusterFlame, ThrusterSparkSystem } from './ThrusterVFX.js';
 import { sounds } from './SoundManager.js';
 
-// Static vectors to prevent allocations in projectile updates
+// Static vectors & scratch objects to eliminate per-frame GC allocations
 const _pOldPos = new THREE.Vector3();
 const _pNewPos = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _up = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _idealPos = new THREE.Vector3();
+const _lookTarget = new THREE.Vector3();
+const _cockpitPos = new THREE.Vector3();
+const _pushNormal = new THREE.Vector3();
+const _hitPoint = new THREE.Vector3();
+const _scratchAimTarget = new THREE.Vector3();
+const _shipWorldQuat = new THREE.Quaternion();
+const _shipDir = new THREE.Vector3();
+const _thrusterWorldPos = new THREE.Vector3();
 
 export class SpaceshipController {
   /**
@@ -494,21 +506,20 @@ export class SpaceshipController {
       const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.20);
       if (enemyTarget && enemyTarget.player) {
         this.crosshairContainer.classList.add('target-locked');
-        this.aimTargetPoint = (enemyTarget.aimPoint || enemyTarget.leadPoint || enemyTarget.player.root.position).clone();
+        _scratchAimTarget.copy(enemyTarget.aimPoint || enemyTarget.leadPoint || enemyTarget.player.root.position);
+        this.aimTargetPoint = _scratchAimTarget;
         return;
       }
     }
 
+    // Ultra-fast analytical bounding sphere raycast against asteroid field (0.01ms, zero polygon testing)
     if (this.asteroidField) {
-      this.targetMeshes = this.asteroidField.getMeshes();
-    }
-
-    if (this.targetMeshes && this.targetMeshes.length > 0) {
       this._aimRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
-      const intersects = this._aimRaycaster.intersectObjects(this.targetMeshes, false);
-      if (intersects.length > 0) {
+      const hit = this.asteroidField.raycastFast(this._aimRaycaster.ray, 500);
+      if (hit) {
         this.crosshairContainer.classList.add('target-locked');
-        this.aimTargetPoint = intersects[0].point;
+        _scratchAimTarget.copy(hit.point);
+        this.aimTargetPoint = _scratchAimTarget;
         return;
       }
     }
@@ -689,20 +700,16 @@ export class SpaceshipController {
     this.visualHolder.rotation.z = this.bankAngle;
 
     // 3. Move forward along ship's local forward vector (-Z)
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
-    this.velocity.copy(forward).multiplyScalar(this.currentSpeed);
+    _forward.set(0, 0, -1).applyQuaternion(this.root.quaternion);
+    this.velocity.copy(_forward).multiplyScalar(this.currentSpeed);
 
     // Optional lateral strafe
-    let strafeX = 0;
     let strafeY = 0;
     if (this.keys['KeyC']) strafeY -= 12; // Strafe down
-    if (this.keys['KeyR'] && !this.keys['KeyR_pressed']) {
-      // (Reserved for skybox switch)
-    }
 
     if (strafeY !== 0) {
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion);
-      this.velocity.addScaledVector(up, strafeY);
+      _up.set(0, 1, 0).applyQuaternion(this.root.quaternion);
+      this.velocity.addScaledVector(_up, strafeY);
     }
 
     this.root.position.addScaledVector(this.velocity, dt);
@@ -726,24 +733,24 @@ export class SpaceshipController {
         if (distSq < rBound * rBound) {
           const dist = Math.sqrt(distSq) || 1.0;
           const overlap = rBound - dist;
-          const pushNormal = new THREE.Vector3().subVectors(shipPos, aPos).multiplyScalar(1 / dist);
+          _pushNormal.subVectors(shipPos, aPos).multiplyScalar(1 / dist);
 
-          this.root.position.addScaledVector(pushNormal, overlap + 0.08);
+          this.root.position.addScaledVector(_pushNormal, overlap + 0.08);
           const collisionSpeed = Math.max(0, this.currentSpeed);
           this.currentSpeed = Math.max(0, this.currentSpeed * 0.35);
 
           const now = performance.now() / 1000;
-          const hitPoint = aPos.clone().addScaledVector(pushNormal, a.boundingRadius);
+          _hitPoint.copy(aPos).addScaledVector(_pushNormal, a.boundingRadius);
 
           if ((this._lastAsteroidHitTime || 0) + 0.55 < now) {
             this._lastAsteroidHitTime = now;
-            this.takeDamage(20, 'asteroid', hitPoint, aPos);
+            this.takeDamage(20, 'asteroid', _hitPoint, aPos);
             if (this.asteroidField && this.asteroidField.spawnAsteroidCollisionEffect) {
-              this.asteroidField.spawnAsteroidCollisionEffect(hitPoint, pushNormal, collisionSpeed, true);
+              this.asteroidField.spawnAsteroidCollisionEffect(_hitPoint, _pushNormal, collisionSpeed, true);
             }
           } else if (collisionSpeed > 2.0 && Math.random() < 0.65) {
             if (this.asteroidField && this.asteroidField.spawnAsteroidCollisionEffect) {
-              this.asteroidField.spawnAsteroidCollisionEffect(hitPoint, pushNormal, collisionSpeed, false);
+              this.asteroidField.spawnAsteroidCollisionEffect(_hitPoint, _pushNormal, collisionSpeed, false);
             }
           }
           break;
@@ -756,17 +763,16 @@ export class SpaceshipController {
     const forwardRatio = Math.max(0, this.currentSpeed / this.maxSpeed);
     const targetThrottle = this.isBoosting ? 1.0 : Math.max(0.18, forwardRatio);
 
-    const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
-    const shipDir = new THREE.Vector3(0, 0, -1).applyQuaternion(shipWorldQuat);
+    this.visualHolder.getWorldQuaternion(_shipWorldQuat);
+    _shipDir.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
     const shouldSpawnSparks = (this.currentSpeed > 2.0 || this.isBoosting) && Math.random() < (this.isBoosting ? 0.9 : 0.45);
 
     for (const thruster of this.activeThrusters) {
       thruster.update(dt, targetThrottle, this.isBoosting);
 
       if (shouldSpawnSparks && this.sparkSystem) {
-        const worldPos = new THREE.Vector3();
-        thruster.root.getWorldPosition(worldPos);
-        this.sparkSystem.spawnSparks(worldPos, shipDir, this.isBoosting);
+        thruster.root.getWorldPosition(_thrusterWorldPos);
+        this.sparkSystem.spawnSparks(_thrusterWorldPos, _shipDir, this.isBoosting);
       }
     }
   }
@@ -778,81 +784,83 @@ export class SpaceshipController {
   updateCamera(dt) {
     this.cameraShake = THREE.MathUtils.lerp(this.cameraShake, 0, 1 - Math.exp(-this.cameraShakeDecay * dt));
 
-    // Dynamic FOV based on speed and boost (opens up wide at high speeds for peripheral velocity rush)
+    // Dynamic FOV based on speed and boost
     const speedRatio = Math.min(1.0, Math.abs(this.currentSpeed) / this.boostSpeed);
     const targetFov = this.isBoosting ? this.boostFov : this.baseFov + speedRatio * 14.0;
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-7 * dt));
-    this.camera.updateProjectionMatrix();
+    if (Math.abs(this.camera.fov - targetFov) > 0.01) {
+      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, 1 - Math.exp(-7 * dt));
+      this.camera.updateProjectionMatrix();
+    }
 
     if (this.cameraMode === 0) {
       // MODE 0: Third-person Chase Camera
-      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion);
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.quaternion);
+      _forward.set(0, 0, -1).applyQuaternion(this.root.quaternion);
+      _up.set(0, 1, 0).applyQuaternion(this.root.quaternion);
+      _right.set(1, 0, 0).applyQuaternion(this.root.quaternion);
 
-      // Dynamic distance pullback based on speed (simulates G-force surge)
+      // Dynamic distance pullback based on speed
       const dynamicChaseDist = this.cameraChaseOffset.z + speedRatio * 1.6 + (this.isBoosting ? 0.9 : 0.0);
 
       // Position behind and slightly above
-      const idealPos = new THREE.Vector3()
+      _idealPos
         .copy(this.root.position)
-        .addScaledVector(forward, -dynamicChaseDist)
-        .addScaledVector(up, this.cameraChaseOffset.y);
+        .addScaledVector(_forward, -dynamicChaseDist)
+        .addScaledVector(_up, this.cameraChaseOffset.y);
 
       // Smooth camera interpolation
       const smoothFactor = 1 - Math.exp(-14 * dt);
-      this.camera.position.lerp(idealPos, smoothFactor);
+      this.camera.position.lerp(_idealPos, smoothFactor);
 
       // Visceral high-speed engine micro-vibration
       if (speedRatio > 0.15 || this.isBoosting) {
         const engineVib = 0.02 * speedRatio + (this.isBoosting ? 0.045 : 0.0);
         this.camera.position
-          .addScaledVector(right, (Math.random() - 0.5) * engineVib)
-          .addScaledVector(up, (Math.random() - 0.5) * engineVib);
+          .addScaledVector(_right, (Math.random() - 0.5) * engineVib)
+          .addScaledVector(_up, (Math.random() - 0.5) * engineVib);
       }
 
       // Look at a target ahead of the ship
-      const lookTarget = new THREE.Vector3()
+      _lookTarget
         .copy(this.root.position)
-        .addScaledVector(forward, this.cameraLookAhead)
-        .addScaledVector(up, 0.5);
+        .addScaledVector(_forward, this.cameraLookAhead)
+        .addScaledVector(_up, 0.5);
 
       // Direct punchy recoil & weapon firing camera shake
       if (this.cameraShake > 0.001) {
         const s = this.cameraShake;
         const shakeX = (Math.random() - 0.5) * s * 0.85;
-        const shakeY = (Math.random() - 0.35) * s * 0.75; // Slight upward recoil kick
-        const shakeZ = -(Math.random() * 0.5 + 0.3) * s * 0.5; // Backward recoil kick
+        const shakeY = (Math.random() - 0.35) * s * 0.75;
+        const shakeZ = -(Math.random() * 0.5 + 0.3) * s * 0.5;
 
         this.camera.position
-          .addScaledVector(right, shakeX)
-          .addScaledVector(up, shakeY)
-          .addScaledVector(forward, shakeZ);
+          .addScaledVector(_right, shakeX)
+          .addScaledVector(_up, shakeY)
+          .addScaledVector(_forward, shakeZ);
 
-        lookTarget
-          .addScaledVector(right, shakeX * 0.5)
-          .addScaledVector(up, shakeY * 0.7);
+        _lookTarget
+          .addScaledVector(_right, shakeX * 0.5)
+          .addScaledVector(_up, shakeY * 0.7);
       }
 
-      this.camera.lookAt(lookTarget);
-      this.camera.up.copy(up);
+      this.camera.lookAt(_lookTarget);
+      this.camera.up.copy(_up);
 
     } else if (this.cameraMode === 1) {
       // MODE 1: Cockpit First-Person
-      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.root.quaternion);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.root.quaternion);
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.quaternion);
+      _forward.set(0, 0, -1).applyQuaternion(this.root.quaternion);
+      _up.set(0, 1, 0).applyQuaternion(this.root.quaternion);
+      _right.set(1, 0, 0).applyQuaternion(this.root.quaternion);
 
-      const cockpitPos = new THREE.Vector3()
+      _cockpitPos
         .copy(this.root.position)
-        .addScaledVector(forward, this.cockpitOffset.z)
-        .addScaledVector(up, this.cockpitOffset.y);
+        .addScaledVector(_forward, this.cockpitOffset.z)
+        .addScaledVector(_up, this.cockpitOffset.y);
 
-      this.camera.position.copy(cockpitPos);
+      this.camera.position.copy(_cockpitPos);
 
-      const lookTarget = new THREE.Vector3()
-        .copy(cockpitPos)
-        .addScaledVector(forward, 50.0);
+      _lookTarget
+        .copy(_cockpitPos)
+        .addScaledVector(_forward, 50.0);
 
       // Visceral cockpit firing recoil
       if (this.cameraShake > 0.001) {
@@ -862,17 +870,17 @@ export class SpaceshipController {
         const shakeZ = -(Math.random() * 0.5 + 0.3) * s * 0.4;
 
         this.camera.position
-          .addScaledVector(right, shakeX)
-          .addScaledVector(up, shakeY)
-          .addScaledVector(forward, shakeZ);
+          .addScaledVector(_right, shakeX)
+          .addScaledVector(_up, shakeY)
+          .addScaledVector(_forward, shakeZ);
 
-        lookTarget
-          .addScaledVector(right, shakeX * 0.8)
-          .addScaledVector(up, shakeY * 0.9);
+        _lookTarget
+          .addScaledVector(_right, shakeX * 0.8)
+          .addScaledVector(_up, shakeY * 0.9);
       }
 
-      this.camera.lookAt(lookTarget);
-      this.camera.up.copy(up);
+      this.camera.lookAt(_lookTarget);
+      this.camera.up.copy(_up);
 
     } else if (this.cameraMode === 2) {
       // MODE 2: Orbit Camera around Ship
@@ -1019,13 +1027,11 @@ export class SpaceshipController {
     if (!points || points.length === 0) return;
 
     this.visualHolder.updateMatrixWorld(true);
-    const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
-    const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(shipWorldQuat);
+    this.visualHolder.getWorldQuaternion(_shipWorldQuat);
+    _shipDir.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
 
-    // Crosshair firing kick animation
+    // Crosshair firing kick animation (without synchronous layout reflow)
     if (this.crosshairContainer) {
-      this.crosshairContainer.classList.remove('firing');
-      void this.crosshairContainer.offsetWidth; // force reflow
       this.crosshairContainer.classList.add('firing');
       if (this._crosshairTimer) clearTimeout(this._crosshairTimer);
       this._crosshairTimer = setTimeout(() => {
@@ -1039,19 +1045,20 @@ export class SpaceshipController {
     let targetPoint = this.aimTargetPoint;
     if (!targetPoint) {
       this._aimRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
-      if (this.targetMeshes && this.targetMeshes.length > 0) {
-        const hits = this._aimRaycaster.intersectObjects(this.targetMeshes, false);
-        if (hits.length > 0) {
-          targetPoint = hits[0].point;
+      if (this.asteroidField) {
+        const hit = this.asteroidField.raycastFast(this._aimRaycaster.ray, 350);
+        if (hit) {
+          targetPoint = hit.point;
         }
       }
       if (!targetPoint) {
         // Combat convergence distance along the camera crosshair ray
         const defaultConvergenceDist = 260.0;
-        targetPoint = this._aimRaycaster.ray.origin.clone().addScaledVector(
+        _scratchAimTarget.copy(this._aimRaycaster.ray.origin).addScaledVector(
           this._aimRaycaster.ray.direction,
           defaultConvergenceDist
         );
+        targetPoint = _scratchAimTarget;
       }
     }
 
@@ -1069,20 +1076,20 @@ export class SpaceshipController {
       }
 
       const pos = sp.position || { x: 0, y: 0, z: -1 };
-      const localPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-      const worldPos = localPos.clone().applyMatrix4(this.visualHolder.matrixWorld);
+      _idealPos.set(pos.x, pos.y, pos.z).applyMatrix4(this.visualHolder.matrixWorld);
 
-      let boltDir = new THREE.Vector3().subVectors(targetPoint, worldPos).normalize();
-      if (targetPoint.distanceTo(worldPos) < 2.0) {
-        boltDir.copy(forwardDir);
+      _pushNormal.subVectors(targetPoint, _idealPos).normalize();
+      if (targetPoint.distanceTo(_idealPos) < 2.0) {
+        _pushNormal.copy(_shipDir);
       }
 
       const colorHex = sp.color || '#ff2244';
       p.outerMesh.material = this.getLaserMaterial(colorHex);
 
-      p.group.position.copy(worldPos);
-      p.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), boltDir);
-      p.dir.copy(boltDir);
+      p.group.position.copy(_idealPos);
+      _forward.set(0, 0, -1);
+      p.group.quaternion.setFromUnitVectors(_forward, _pushNormal);
+      p.dir.copy(_pushNormal);
       p.speed = 160.0;
       p.life = 0.0;
       p.maxLife = 1.4;
@@ -1095,7 +1102,7 @@ export class SpaceshipController {
 
     sounds.playLaser();
     if (this.onLaserFired) {
-      this.onLaserFired({ points, dir: forwardDir.toArray(), speed: 160.0 });
+      this.onLaserFired({ points, dir: _shipDir.toArray(), speed: 160.0 });
     }
   }
 
@@ -1182,8 +1189,8 @@ export class SpaceshipController {
             this.onLaserHitEnemy(hitInfo.player, hitInfo.hitPoint, 25);
           }
           if (this.asteroidField && this.asteroidField.spawnLaserHitEffect) {
-            const hitNorm = new THREE.Vector3().subVectors(hitInfo.hitPoint, hitInfo.player.root.position).normalize();
-            this.asteroidField.spawnLaserHitEffect(hitInfo.hitPoint, hitNorm, p.colorHex);
+            _pushNormal.subVectors(hitInfo.hitPoint, hitInfo.player.root.position).normalize();
+            this.asteroidField.spawnLaserHitEffect(hitInfo.hitPoint, _pushNormal, p.colorHex);
           }
           continue;
         }

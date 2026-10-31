@@ -734,10 +734,16 @@ body.touch-device #touch-controls.visible {
   box-shadow: 0 0 8px #00f0ff;
 }
 
-#btn-dev-stats-toggle.active {
+#btn-dev-stats-toggle.active,
+#btn-shadows-toggle.active {
   background: rgba(0, 240, 255, 0.12);
   border-color: rgba(0, 240, 255, 0.4);
   color: #00f0ff;
+}
+
+#btn-graphics-toggle {
+  min-width: 86px;
+  justify-content: center;
 }
 
 .hotkey-badge {

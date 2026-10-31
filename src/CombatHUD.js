@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { sounds } from './SoundManager.js';
 import { Icons } from './Icons.js';
 
+const _radarForward = new THREE.Vector3();
+
 export class CombatHUD {
   /**
    * @param {object} options
@@ -38,6 +40,7 @@ export class CombatHUD {
     this.isScoreboardOpen = false;
     this.isDestroyed = false;
     this.respawnTimer = 0;
+    this._activePlayerIds = new Set();
 
     this._scratchVec = new THREE.Vector3();
     this._screenVec = new THREE.Vector3();
@@ -539,7 +542,8 @@ export class CombatHUD {
   updateTacticalTargets(camera, localShipPos, remotePlayersManager) {
     if (!this.inViewContainer || !this.offscreenContainer || !remotePlayersManager) return;
     const players = remotePlayersManager.getAllPlayers();
-    const activePlayerIds = new Set();
+    const activePlayerIds = this._activePlayerIds;
+    activePlayerIds.clear();
 
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -771,8 +775,8 @@ export class CombatHUD {
     ctx.lineTo(w - 6, cy);
     ctx.stroke();
 
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(localShipQuat);
-    const shipYaw = Math.atan2(forward.x, -forward.z);
+    _radarForward.set(0, 0, -1).applyQuaternion(localShipQuat);
+    const shipYaw = Math.atan2(_radarForward.x, -_radarForward.z);
 
     // Draw Remote Enemy Players (crisp red dots)
     if (remotePlayersManager) {

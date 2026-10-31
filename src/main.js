@@ -46,34 +46,10 @@ const renderer = new THREE.WebGLRenderer({
   preserveDrawingBuffer: ENABLE_RECORDER
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-// Dev Stats HUD ("Stats for Nerds")
-const devStatsHUD = new DevStatsHUD({
-  renderer,
-  scene,
-  camera,
-  getClient: () => client
-});
-
-// Options & Recorder
-const optionsMenu = new OptionsMenu({
-  onLeaveMatch: () => {
-    if (client) client.leaveRoom();
-    enterMainMenu(true);
-  },
-  onToggleDevStats: (enabled) => {
-    if (currentGameState === 'BATTLE' && devStatsHUD) {
-      devStatsHUD.setVisible(enabled);
-    }
-  }
-});
-devStatsHUD.setVisible(false); // Telemetry stats are only visible during active gameplay
-const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
 // 5. Lighting Setup
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
@@ -83,8 +59,11 @@ const hemisphereLight = new THREE.HemisphereLight(0x7dd3fc, 0x1e1e38, 0.4);
 scene.add(hemisphereLight);
 
 const sunLight = new THREE.DirectionalLight(0xfff7ed, 2.5);
-sunLight.position.set(200, 150, 100);
+const sunDirOffset = new THREE.Vector3(200, 150, 100);
+sunLight.position.copy(sunDirOffset);
 sunLight.castShadow = true;
+sunLight.shadow.bias = -0.0003;
+sunLight.shadow.normalBias = 0.02;
 sunLight.shadow.mapSize.width = 2048;
 sunLight.shadow.mapSize.height = 2048;
 sunLight.shadow.camera.near = 10;
@@ -120,6 +99,55 @@ let lobbyUI = null;
 let crosshairContainer = null;
 let touchControlsContainer = null;
 let touchControls = null;
+
+// Graphics settings coordinator
+let currentPixelRatioCap = 1.5;
+
+function applyGraphicsSettings(config) {
+  if (!config) return;
+  const { pixelRatioCap, shadowsEnabled } = config;
+  currentPixelRatioCap = pixelRatioCap || 1.5;
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, currentPixelRatioCap));
+  renderer.shadowMap.enabled = !!shadowsEnabled;
+  if (sunLight) {
+    sunLight.castShadow = !!shadowsEnabled;
+  }
+
+  if (asteroidField && !shadowsEnabled) {
+    for (const a of asteroidField.asteroids) {
+      if (a.mesh && a.mesh.castShadow) a.mesh.castShadow = false;
+    }
+  }
+}
+
+// Dev Stats HUD ("Stats for Nerds")
+const devStatsHUD = new DevStatsHUD({
+  renderer,
+  scene,
+  camera,
+  getClient: () => client
+});
+
+// Options & Recorder
+const optionsMenu = new OptionsMenu({
+  onLeaveMatch: () => {
+    if (client) client.leaveRoom();
+    enterMainMenu(true);
+  },
+  onToggleDevStats: (enabled) => {
+    if (currentGameState === 'BATTLE' && devStatsHUD) {
+      devStatsHUD.setVisible(enabled);
+    }
+  },
+  onGraphicsChange: (config) => {
+    applyGraphicsSettings(config);
+  }
+});
+applyGraphicsSettings(optionsMenu.getGraphicsConfig());
+
+devStatsHUD.setVisible(false); // Telemetry stats are only visible during active gameplay
+const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
 
 // Minimal Ammo Telemetry HUD elements
 let minimalAmmoHUD = null;
@@ -246,7 +274,7 @@ function updateViewportAndAspectRatio() {
   camera.aspect = aspect;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, currentPixelRatioCap));
 
   updateMenuLayout();
 }
@@ -496,10 +524,11 @@ function animate() {
         spaceship.isBoosting ? 1.0 : 0.0
       );
     }
-    if (asteroidField) asteroidField.update(dt);
+    if (asteroidField) asteroidField.update(dt, spaceship.root.position);
 
-    // Keep sunlight shadow camera focused near player
+    // Keep sunlight shadow camera focused near player maintaining directional angle
     sunLight.target.position.copy(spaceship.root.position);
+    sunLight.position.copy(spaceship.root.position).add(sunDirOffset);
     sunLight.target.updateMatrixWorld();
   }
 
@@ -1052,10 +1081,9 @@ async function initPipeline() {
     spaceship.onAmmoChanged = (current, max) => {
       updateAmmoUI(current, max);
       if (minimalAmmoHUD) {
-        minimalAmmoHUD.classList.remove('firing');
-        void minimalAmmoHUD.offsetWidth;
         minimalAmmoHUD.classList.add('firing');
-        setTimeout(() => {
+        if (minimalAmmoHUD._firingTimer) clearTimeout(minimalAmmoHUD._firingTimer);
+        minimalAmmoHUD._firingTimer = setTimeout(() => {
           if (minimalAmmoHUD) minimalAmmoHUD.classList.remove('firing');
         }, 75);
       }

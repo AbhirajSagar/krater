@@ -11,6 +11,10 @@ import { createBehavior } from './EnemyBehaviors.js';
 const _vToTarget = new THREE.Vector3();
 const _shipFwd = new THREE.Vector3();
 const _shotDir = new THREE.Vector3();
+const _shipWorldQuat = new THREE.Quaternion();
+const _right = new THREE.Vector3();
+const _forward = new THREE.Vector3();
+const _origin = new THREE.Vector3();
 
 export class AIEnemy extends EnemyEntity {
   /**
@@ -79,8 +83,8 @@ export class AIEnemy extends EnemyEntity {
     }
 
     _vToTarget.normalize();
-    const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
-    _shipFwd.set(0, 0, -1).applyQuaternion(shipWorldQuat);
+    this.visualHolder.getWorldQuaternion(_shipWorldQuat);
+    _shipFwd.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
 
     // Check if target is within a ~30-degree cone (cos(30 deg) ~= 0.866)
     const dot = _shipFwd.dot(_vToTarget);
@@ -101,27 +105,27 @@ export class AIEnemy extends EnemyEntity {
 
     // Inaccuracy spread
     const spread = (1.0 - this.weapon.accuracy) * 0.15;
-    _shotDir.copy(_vToTarget).add(new THREE.Vector3(
-      (Math.random() - 0.5) * spread,
-      (Math.random() - 0.5) * spread,
-      (Math.random() - 0.5) * spread
-    )).normalize();
+    _shotDir.set(
+      _vToTarget.x + (Math.random() - 0.5) * spread,
+      _vToTarget.y + (Math.random() - 0.5) * spread,
+      _vToTarget.z + (Math.random() - 0.5) * spread
+    ).normalize();
 
     // Hardpoint offsets (twin cannons on ship wings)
-    const shipWorldQuat = this.visualHolder.getWorldQuaternion(new THREE.Quaternion());
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(shipWorldQuat);
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(shipWorldQuat);
+    this.visualHolder.getWorldQuaternion(_shipWorldQuat);
+    _right.set(1, 0, 0).applyQuaternion(_shipWorldQuat);
+    _forward.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
 
     const gunOffset = 1.1;
     const side = Math.random() > 0.5 ? 1 : -1;
-    const origin = this.root.position.clone()
-      .addScaledVector(right, side * gunOffset)
-      .addScaledVector(forward, 1.8);
+    _origin.copy(this.root.position)
+      .addScaledVector(_right, side * gunOffset)
+      .addScaledVector(_forward, 1.8);
 
     const shotData = {
       shooterId: this.id,
       shooterName: this.name,
-      origin: [origin.x, origin.y, origin.z],
+      origin: [_origin.x, _origin.y, _origin.z],
       dir: [_shotDir.x, _shotDir.y, _shotDir.z],
       speed: this.weapon.projectileSpeed,
       damage: this.weapon.damage,

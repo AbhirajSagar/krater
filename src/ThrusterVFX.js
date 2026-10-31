@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+// Static scratch colors to eliminate GC allocations
+const _boostShiftColor = new THREE.Color(1.0, 0.8, 0.4);
+const _tempLightColor = new THREE.Color();
+
 /**
  * Thruster VFX - High-Fidelity Procedural Supersonic Plasma & Jet Fire
  * 
@@ -452,10 +456,10 @@ export class ThrusterFlame {
     const boostLightMultiplier = 1.0 + this.currentBoost * 2.5;
     this.pointLight.intensity = baseLight * throttleScale * boostLightMultiplier * flicker;
 
-    // Color shift on boost for the light
+    // Color shift on boost for the light (zero allocation)
     if (this.currentBoost > 0.05) {
-      const boostLightCol = this.flameColor.clone().lerp(new THREE.Color(1.0, 0.8, 0.4), this.currentBoost * 0.4);
-      this.pointLight.color.copy(boostLightCol);
+      _tempLightColor.copy(this.flameColor).lerp(_boostShiftColor, this.currentBoost * 0.4);
+      this.pointLight.color.copy(_tempLightColor);
     } else {
       this.pointLight.color.copy(this.flameColor);
     }
@@ -597,8 +601,11 @@ export class ThrusterSparkSystem {
     const alphaAttr = this.points.geometry.attributes.alpha;
     const sizeAttr = this.points.geometry.attributes.size;
 
+    let hasActiveOrDied = false;
+
     for (let i = 0; i < this.maxSparks; i++) {
       if (this.alphas[i] <= 0) continue;
+      hasActiveOrDied = true;
 
       this.lifetimes[i] += dt;
       if (this.lifetimes[i] >= this.maxLifetimes[i]) {
@@ -620,9 +627,11 @@ export class ThrusterSparkSystem {
       sizeAttr.setX(i, this.sizes[i] * (1.0 - progress * 0.5));
     }
 
-    posAttr.needsUpdate = true;
-    alphaAttr.needsUpdate = true;
-    sizeAttr.needsUpdate = true;
+    if (hasActiveOrDied) {
+      posAttr.needsUpdate = true;
+      alphaAttr.needsUpdate = true;
+      sizeAttr.needsUpdate = true;
+    }
   }
 
   /**

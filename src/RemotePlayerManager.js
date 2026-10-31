@@ -15,6 +15,20 @@ const _v = new THREE.Vector3();
 const _closest = new THREE.Vector3();
 const _pOldPos = new THREE.Vector3();
 const _pNewPos = new THREE.Vector3();
+const _screenPos = new THREE.Vector3();
+const _leadWorld = new THREE.Vector3();
+const _leadScreenPos = new THREE.Vector3();
+const _camSpace = new THREE.Vector3();
+const _bestLeadPoint = new THREE.Vector3();
+const _bestAimPoint = new THREE.Vector3();
+const _staticTargetResult = {
+  player: null,
+  screenX: 0,
+  screenY: 0,
+  worldDistance: 0,
+  leadPoint: _bestLeadPoint,
+  aimPoint: _bestAimPoint
+};
 
 export class RemotePlayerManager {
   /**
@@ -285,41 +299,35 @@ export class RemotePlayerManager {
     let bestTarget = null;
     let minDistance = Infinity;
 
-    const screenPos = new THREE.Vector3();
-    const leadWorld = new THREE.Vector3();
-    const leadScreenPos = new THREE.Vector3();
-    const camSpace = new THREE.Vector3();
-
     for (const player of this.players.values()) {
       if (player.isDestroyed || !player.root.visible) continue;
 
-      camSpace.copy(player.root.position).applyMatrix4(camera.matrixWorldInverse);
-      if (camSpace.z >= -0.1) continue; // Behind camera
+      _camSpace.copy(player.root.position).applyMatrix4(camera.matrixWorldInverse);
+      if (_camSpace.z >= -0.1) continue; // Behind camera
 
-      screenPos.copy(player.root.position).project(camera);
-      const shipScreenDist = Math.hypot(screenPos.x, screenPos.y);
+      _screenPos.copy(player.root.position).project(camera);
+      const shipScreenDist = Math.hypot(_screenPos.x, _screenPos.y);
 
       // Predictive lead calculation (lasers travel at 160 m/s)
       const worldDist = player.root.position.distanceTo(camera.position);
       const tLead = worldDist / 160.0;
-      leadWorld.copy(player.root.position).addScaledVector(player.velocity, tLead);
+      _leadWorld.copy(player.root.position).addScaledVector(player.velocity, tLead);
 
-      leadScreenPos.copy(leadWorld).project(camera);
-      const leadScreenDist = Math.hypot(leadScreenPos.x, leadScreenPos.y);
+      _leadScreenPos.copy(_leadWorld).project(camera);
+      const leadScreenDist = Math.hypot(_leadScreenPos.x, _leadScreenPos.y);
 
       const effectiveScreenDist = Math.min(shipScreenDist, leadScreenDist);
       if (effectiveScreenDist <= maxScreenDist) {
         if (worldDist < minDistance) {
           minDistance = worldDist;
           const preferLead = leadScreenDist <= shipScreenDist && player.velocity.length() > 1.2;
-          bestTarget = {
-            player,
-            screenX: preferLead ? leadScreenPos.x : screenPos.x,
-            screenY: preferLead ? leadScreenPos.y : screenPos.y,
-            worldDistance: worldDist,
-            leadPoint: leadWorld.clone(),
-            aimPoint: preferLead ? leadWorld.clone() : player.root.position.clone()
-          };
+          _bestLeadPoint.copy(_leadWorld);
+          _bestAimPoint.copy(preferLead ? _leadWorld : player.root.position);
+          _staticTargetResult.player = player;
+          _staticTargetResult.screenX = preferLead ? _leadScreenPos.x : _screenPos.x;
+          _staticTargetResult.screenY = preferLead ? _leadScreenPos.y : _screenPos.y;
+          _staticTargetResult.worldDistance = worldDist;
+          bestTarget = _staticTargetResult;
         }
       }
     }

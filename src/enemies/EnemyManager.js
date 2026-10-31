@@ -18,6 +18,16 @@ const _camSpace = new THREE.Vector3();
 const _screenPos = new THREE.Vector3();
 const _leadWorld = new THREE.Vector3();
 const _leadScreenPos = new THREE.Vector3();
+const _bestLeadPoint = new THREE.Vector3();
+const _bestAimPoint = new THREE.Vector3();
+const _staticTargetResult = {
+  player: null,
+  screenX: 0,
+  screenY: 0,
+  worldDistance: 0,
+  leadPoint: _bestLeadPoint,
+  aimPoint: _bestAimPoint
+};
 
 export class EnemyManager {
   /**
@@ -226,14 +236,13 @@ export class EnemyManager {
         if (worldDist < minDistance) {
           minDistance = worldDist;
           const preferLead = leadScreenDist <= shipScreenDist && enemy.velocity.length() > 1.2;
-          bestTarget = {
-            player: enemy,
-            screenX: preferLead ? _leadScreenPos.x : _screenPos.x,
-            screenY: preferLead ? _leadScreenPos.y : _screenPos.y,
-            worldDistance: worldDist,
-            leadPoint: _leadWorld.clone(),
-            aimPoint: preferLead ? _leadWorld.clone() : enemy.root.position.clone()
-          };
+          _bestLeadPoint.copy(_leadWorld);
+          _bestAimPoint.copy(preferLead ? _leadWorld : enemy.root.position);
+          _staticTargetResult.player = enemy;
+          _staticTargetResult.screenX = preferLead ? _leadScreenPos.x : _screenPos.x;
+          _staticTargetResult.screenY = preferLead ? _leadScreenPos.y : _screenPos.y;
+          _staticTargetResult.worldDistance = worldDist;
+          bestTarget = _staticTargetResult;
         }
       }
     }
