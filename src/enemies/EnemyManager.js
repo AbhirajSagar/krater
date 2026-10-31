@@ -252,7 +252,10 @@ export class EnemyManager {
   // --- Visual Explosion ---
   spawnShipExplosion(pos) {
     if (this.asteroidField) {
-      this.asteroidField.spawnExplosionSparks(pos, 5.0);
+      this.asteroidField.spawnExplosionSparks(pos, 5.5, true);
+      if (this.asteroidField.spawnShipWreckage) {
+        this.asteroidField.spawnShipWreckage(pos, 3.2, 10);
+      }
       this.asteroidField.spawnShockwave(pos, 6.0);
     }
     sounds.playExplosion(1.4);
@@ -428,7 +431,13 @@ export class EnemyManager {
               p.active = false;
               p.group.visible = false;
               this.activeLasers.splice(i, 1);
-              localSpaceship.takeDamage(p.damage, p.shooterId, _closest);
+              const shooter = this.getEnemy(p.shooterId);
+              const sourcePos = shooter ? shooter.root.position : p.group.position;
+              localSpaceship.takeDamage(p.damage, p.shooterId, _closest, sourcePos);
+              if (this.asteroidField && this.asteroidField.spawnLaserHitEffect) {
+                const hitNorm = new THREE.Vector3().subVectors(_closest, shipPos).normalize();
+                this.asteroidField.spawnLaserHitEffect(_closest, hitNorm, '#ff3b30');
+              }
               continue;
             }
           }

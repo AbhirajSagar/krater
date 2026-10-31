@@ -49,7 +49,7 @@ export class LobbyUI {
     this.selectedThemeKey = localStorage.getItem('spacegame_theme_key') || 'Cyan';
 
     this.currentScreen = 'main'; // 'main', 'lobby'
-    this.currentStep = 'main';   // 'main', 'play', 'solo-map', 'multiplayer', 'hangar', 'pilot', 'controls', 'settings', 'credits'
+    this.currentStep = 'main';   // 'main', 'play', 'solo-map', 'multiplayer', 'hangar', 'pilot', 'controls', 'settings'
     this.isHost = false;
     this.isReady = false;
     this.isLoading = false;
@@ -84,28 +84,8 @@ export class LobbyUI {
       <!-- ================= MAIN MENU SCREEN (Spaceship on Left, Menu Steps on Right) ================= -->
       <div class="lobby-screen screen-main screen-split-layout" id="screen-main">
 
-        <!-- ================= LEFT SIDE: OPEN 3D SHIP VIEWPORT & TELEMETRY ================= -->
-        <div class="menu-left-viewport" id="ship-viewport-space">
-          <!-- Sleek Tactical Vessel Watermark Overlay -->
-          <div class="vessel-watermark-overlay" id="vessel-watermark">
-            <div class="watermark-badge-row">
-              <span class="watermark-badge">VESSEL IN HANGAR</span>
-              <span class="watermark-counter" id="watermark-ship-counter">01 / ${SPACESHIP_CONFIGS.length}</span>
-            </div>
-            <div class="watermark-ship-name" id="watermark-ship-name">StarSparrow 1</div>
-            <div class="watermark-stats-line">
-              <span class="wm-stat"><span class="wm-stat-lbl">SPD</span> <span class="wm-stat-val" id="watermark-spd-val">55</span></span>
-              <span class="wm-divider">/</span>
-              <span class="wm-stat"><span class="wm-stat-lbl">BST</span> <span class="wm-stat-val" id="watermark-bst-val">121</span></span>
-              <span class="wm-divider">/</span>
-              <span class="wm-stat"><span class="wm-stat-lbl">AGL</span> <span class="wm-stat-val" id="watermark-agl-val">88%</span></span>
-            </div>
-            <div class="watermark-hint">
-              ${Icons.refresh(13)}
-              <span>DRAG TO INSPECT 360°</span>
-            </div>
-          </div>
-        </div>
+        <!-- ================= LEFT SIDE: OPEN 3D SHIP VIEWPORT ================= -->
+        <div class="menu-left-viewport" id="ship-viewport-space"></div>
 
         <!-- ================= RIGHT SIDE: MENU OPTIONS (STEP / SUBMENU SYSTEM) ================= -->
         <aside class="menu-right-panel" id="panel-menu">
@@ -158,13 +138,6 @@ export class LobbyUI {
                 <button id="btn-goto-settings" class="arcade-btn arcade-btn-sub" type="button">
                   <span class="arcade-btn-icon">${Icons.settings(18)}</span>
                   <span class="arcade-btn-label">SETTINGS</span>
-                  <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
-                </button>
-
-                <!-- 6. Credits -->
-                <button id="btn-goto-credits" class="arcade-btn arcade-btn-sub" type="button">
-                  <span class="arcade-btn-icon">${Icons.info(18)}</span>
-                  <span class="arcade-btn-label">CREDITS</span>
                   <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
                 </button>
               </div>
@@ -395,6 +368,7 @@ export class LobbyUI {
                 <div class="control-key-item"><span class="control-key-badge">Space / Shift</span><span class="control-key-desc">Afterburner Boost Turbo</span></div>
                 <div class="control-key-item"><span class="control-key-badge">Enter / F / Click</span><span class="control-key-desc">Fire Pulse Lasers</span></div>
                 <div class="control-key-item"><span class="control-key-badge">Esc / O</span><span class="control-key-desc">In-Game Tactical Options</span></div>
+                <div class="control-key-item"><span class="control-key-badge">F3</span><span class="control-key-desc">Toggle Stats for Nerds (In-Game)</span></div>
 
                 <div class="controls-section-title" style="margin-top: 10px;">MOBILE & TOUCH</div>
                 <div class="control-key-item"><span class="control-key-badge">Left Joystick</span><span class="control-key-desc">Flight Steering & Throttle</span></div>
@@ -425,13 +399,13 @@ export class LobbyUI {
                   <button id="btn-toggle-fullscreen-menu" class="btn-glass-sm" type="button">Toggle</button>
                 </div>
 
-                <!-- Dev Stats HUD -->
+                <!-- Stats for Nerds (Available in-game only) -->
                 <div class="settings-action-row">
                   <div class="settings-info">
-                    <span class="settings-title">DEV STATS HUD</span>
-                    <span class="settings-desc">FPS, latency, draw calls</span>
+                    <span class="settings-title">STATS FOR NERDS</span>
+                    <span class="settings-desc">FPS, polygons, draw calls & GPU telemetry</span>
                   </div>
-                  <button id="btn-toggle-devstats-menu" class="btn-glass-sm" type="button">Toggle</button>
+                  <span class="settings-badge-gameplay-only">In-Game Only</span>
                 </div>
 
                 <!-- Open Full In-Game Options Modal -->
@@ -440,28 +414,6 @@ export class LobbyUI {
                   <span class="arcade-btn-label">ADVANCED OPTIONS</span>
                   <span class="arcade-btn-chevron">${Icons.chevronRight(16)}</span>
                 </button>
-              </div>
-            </div>
-
-            <!-- ================= STEP 9: CREDITS ================= -->
-            <div class="menu-step-container" id="step-credits">
-              <div class="subnav-header">
-                <button class="btn-subnav-back" data-back-to="main" type="button">
-                  ${Icons.arrowLeft(15)}
-                  <span>MAIN</span>
-                </button>
-                <div class="subnav-title-group">
-                  <span class="subnav-step-badge">TRANSMISSION</span>
-                  <span class="subnav-title">CREDITS</span>
-                </div>
-              </div>
-
-              <div class="credits-body">
-                <div class="credits-item"><span class="credits-role">Engine</span><span class="credits-val">Three.js PBR WebGL</span></div>
-                <div class="credits-item"><span class="credits-role">Vessels</span><span class="credits-val">StarSparrow Modular Fleet</span></div>
-                <div class="credits-item"><span class="credits-role">Audio</span><span class="credits-val">Web Audio API Synthesizer</span></div>
-                <div class="credits-item"><span class="credits-role">Network</span><span class="credits-val">WebSocket Real-Time Protocol</span></div>
-                <div class="credits-item"><span class="credits-role">Typography</span><span class="credits-val">Outfit Variable Sans</span></div>
               </div>
             </div>
 
@@ -749,7 +701,6 @@ export class LobbyUI {
     document.getElementById('btn-goto-hangar')?.addEventListener('click', () => this.navigateToStep('hangar'));
     document.getElementById('btn-goto-controls')?.addEventListener('click', () => this.navigateToStep('controls'));
     document.getElementById('btn-goto-settings')?.addEventListener('click', () => this.navigateToStep('settings'));
-    document.getElementById('btn-goto-credits')?.addEventListener('click', () => this.navigateToStep('credits'));
 
     // 3. Play Mode Choices
     document.getElementById('btn-select-solo')?.addEventListener('click', () => this.navigateToStep('solo-map'));
@@ -875,24 +826,6 @@ export class LobbyUI {
         }
       } catch (err) {
         this.showToast('Fullscreen request rejected by browser', 'error');
-      }
-    });
-
-    document.getElementById('btn-toggle-devstats-menu')?.addEventListener('click', () => {
-      sounds.playClick();
-      const current = localStorage.getItem('spacegame_dev_stats') === 'true';
-      const next = !current;
-      localStorage.setItem('spacegame_dev_stats', String(next));
-      if (this.onOpenSettings) {
-        // OptionsMenu listens to devStatsEnabled
-      }
-      this.showToast(`Dev Stats ${next ? 'enabled' : 'disabled'}`, 'info');
-      // Trigger dev stats toggle if global reference exists
-      const optBtn = document.getElementById('btn-options-toggle');
-      if (optBtn) {
-        // Toggle HUD directly if possible
-        const hud = document.getElementById('dev-stats-hud');
-        if (hud) hud.classList.toggle('visible', next);
       }
     });
 

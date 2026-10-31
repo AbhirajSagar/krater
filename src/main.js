@@ -18,6 +18,7 @@ import { CombatHUD } from './CombatHUD.js';
 import { LobbyUI } from './LobbyUI.js';
 import { SPACESHIP_CONFIGS } from './spaceshipConfig.js';
 import { EnemyManager, EnemySpawner, enemyFactory, BUILTIN_ARCHETYPES } from './enemies/index.js';
+import { ItemManager, CollectibleItem } from './items/index.js';
 
 // 1. Initialize Loading Screen
 const loadingScreen = new LoadingScreen();
@@ -66,10 +67,12 @@ const optionsMenu = new OptionsMenu({
     enterMainMenu(true);
   },
   onToggleDevStats: (enabled) => {
-    if (devStatsHUD) devStatsHUD.setVisible(enabled);
+    if (currentGameState === 'BATTLE' && devStatsHUD) {
+      devStatsHUD.setVisible(enabled);
+    }
   }
 });
-devStatsHUD.setVisible(optionsMenu.devStatsEnabled);
+devStatsHUD.setVisible(false); // Telemetry stats are only visible during active gameplay
 const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
 
 // 5. Lighting Setup
@@ -110,6 +113,7 @@ let client = null;
 let remotePlayersManager = null;
 let enemyManager = null;
 let enemySpawner = null;
+let itemManager = null;
 let combatHUD = null;
 let lobbyUI = null;
 
@@ -284,6 +288,7 @@ window._updateMenuLayout = updateMenuLayout;
 function enterMainMenu(advanceSkybox = false) {
   currentGameState = 'MENU';
   if (optionsMenu) optionsMenu.setInBattle(false);
+  if (devStatsHUD) devStatsHUD.setVisible(false);
   if (spaceship) {
     spaceship.enabled = false;
     spaceship.root.rotation.set(0.08, 0.45, 0);
@@ -305,6 +310,7 @@ function enterMainMenu(advanceSkybox = false) {
   if (remotePlayersManager) remotePlayersManager.clear();
   if (enemyManager) enemyManager.clear();
   if (enemySpawner) enemySpawner.dispose();
+  if (itemManager) itemManager.clear();
   if (asteroidField && mapManager?.currentMap?.asteroids?.enabled !== false) {
     asteroidField.reseed('spacegame_menu_sector', mapManager?.currentMap?.asteroids || {});
   }
@@ -324,6 +330,7 @@ function enterMainMenu(advanceSkybox = false) {
 function startBattle(room = null, isSolo = false) {
   currentGameState = 'BATTLE';
   if (optionsMenu) optionsMenu.setInBattle(true);
+  if (devStatsHUD) devStatsHUD.setVisible(optionsMenu.devStatsEnabled);
   if (lobbyUI) lobbyUI.hideAll();
   if (combatHUD) combatHUD.show();
 
@@ -393,6 +400,9 @@ function startBattle(room = null, isSolo = false) {
     if (enemyManager) {
       enemyManager.clear();
     }
+    if (itemManager) {
+      itemManager.clear();
+    }
     if (enemySpawner) {
       enemySpawner.setMode('multiplayer', client.room?.hostId === client.playerId);
     }
@@ -423,6 +433,9 @@ function startBattle(room = null, isSolo = false) {
     }
     if (enemyManager) {
       enemyManager.clear();
+    }
+    if (itemManager) {
+      itemManager.clear();
     }
     if (enemySpawner) {
       enemySpawner.setMode('singleplayer', true);
@@ -509,6 +522,11 @@ function animate() {
     remotePlayersManager.update(dt, camera, spaceship);
   }
 
+  // Update Collectible Space Items & check touch collisions against ship
+  if (itemManager && currentGameState === 'BATTLE') {
+    itemManager.update(dt, spaceship);
+  }
+
   // Update Tactical Combat HUD
   if (currentGameState === 'BATTLE') {
     if (combatHUD && spaceship) {
@@ -525,8 +543,9 @@ function animate() {
         camera,
         spaceship.root.position,
         spaceship.root.quaternion,
-        enemyManager || remotePlayersManager,
-        asteroidField
+        remotePlayersManager,
+        asteroidField,
+        enemyManager
       );
     }
 
@@ -688,7 +707,9 @@ function bindNetworkEvents() {
 
   client.on('relay:PLAYER_HIT', (data) => {
     if (data.victimId === client.playerId && spaceship) {
-      spaceship.takeDamage(data.damage, data.attackerId, data.hitPoint);
+      const shooter = remotePlayersManager ? remotePlayersManager.getPlayer(data.attackerId) : null;
+      const sourcePos = shooter ? shooter.root.position : null;
+      spaceship.takeDamage(data.damage, data.attackerId, data.hitPoint, sourcePos);
     }
   });
 
@@ -812,6 +833,11 @@ function bindNetworkEvents() {
 
     spaceship.onLaserHitEnemy = (enemyPlayer, hitPoint, damage) => {
       if (combatHUD) combatHUD.triggerHitmarker();
+      if (asteroidField && hitPoint) {
+        const enemyPos = enemyPlayer?.root?.position || hitPoint;
+        const norm = new THREE.Vector3().subVectors(hitPoint, enemyPos).normalize();
+        asteroidField.spawnLaserHitEffect(hitPoint, norm, '#ff2244');
+      }
 
       if (enemyPlayer) {
         // If target is an EnemyEntity / AIEnemy
@@ -874,11 +900,17 @@ function bindNetworkEvents() {
       }
     };
 
-    spaceship.onDamaged = (shield, hull, attackerId) => {
+    spaceship.onDamaged = (shield, hull, attackerId, hitPoint, sourcePos) => {
       if (combatHUD) combatHUD.updateLocalVitals({ shield, hull });
       if (currentGameState === 'BATTLE' && client.isConnected && client.room) {
         client.relay('PLAYER_DAMAGED', { playerId: client.playerId, shield, hull });
         client.updatePlayerState({ shield, hull });
+      }
+    };
+
+    spaceship.onIncomingDamage = (amount, attackerId, hitPoint, sourcePos) => {
+      if (combatHUD) {
+        combatHUD.triggerDamageIndicator(sourcePos, hitPoint, attackerId);
       }
     };
 
@@ -913,6 +945,14 @@ function bindNetworkEvents() {
   // Asteroid Destruction & Damage Sync
   if (asteroidField) {
     asteroidField.onAsteroidDestroyed = (index, pos) => {
+      if (spaceship && spaceship.root && pos) {
+        const astPos = Array.isArray(pos) ? new THREE.Vector3().fromArray(pos) : pos;
+        const dist = spaceship.root.position.distanceTo(astPos);
+        if (dist < 140) {
+          const shake = Math.max(0, (1.0 - dist / 140) * 0.65);
+          spaceship.triggerCameraShake(shake);
+        }
+      }
       if (currentGameState === 'BATTLE' && client.isConnected && client.room) {
         client.relay('ASTEROID_DESTROYED', { asteroidIndex: index, pos });
       }
@@ -978,7 +1018,7 @@ async function initPipeline() {
 
   // Phase 4: Hazards, Space Dust, Controls
   loadingScreen.setProgress(84);
-  asteroidField = new AsteroidField(scene, 140, 'spacegame_menu_sector');
+  asteroidField = new AsteroidField(scene, 180, 'spacegame_menu_sector');
   spaceship.setAsteroidField(asteroidField);
   if (mapManager) {
     mapManager.setAsteroidField(asteroidField);
@@ -1028,6 +1068,7 @@ async function initPipeline() {
   remotePlayersManager = new RemotePlayerManager(scene, asteroidField);
   enemyManager = new EnemyManager(scene, asteroidField);
   enemyManager.setRemotePlayerManager(remotePlayersManager);
+  itemManager = new ItemManager(scene);
 
   enemySpawner = new EnemySpawner(enemyManager, {
     mode: 'singleplayer',
@@ -1048,6 +1089,12 @@ async function initPipeline() {
     enemySpawner,
     enemyFactory,
     BUILTIN_ARCHETYPES
+  };
+
+  // Expose modular item system for developer exploration & extension
+  window.itemSystem = {
+    itemManager,
+    CollectibleItem
   };
 
   // Phase 6: Combat HUD & Lobby UI

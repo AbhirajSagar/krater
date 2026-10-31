@@ -44,6 +44,13 @@ export class OptionsMenu {
         this.leaveRow.classList.add('hidden');
       }
     }
+    if (this.devStatsRow) {
+      if (this.inBattle) {
+        this.devStatsRow.classList.remove('hidden');
+      } else {
+        this.devStatsRow.classList.add('hidden');
+      }
+    }
   }
 
   showToggleButton() {
@@ -108,10 +115,10 @@ export class OptionsMenu {
               </button>
             </div>
 
-            <!-- Stats for Nerds / Developer Telemetry Row -->
-            <div class="option-row">
+            <!-- Stats for Nerds / Developer Telemetry Row (Gameplay only) -->
+            <div id="option-row-dev-stats" class="option-row hidden">
               <div class="option-info">
-                <span class="option-label">Stats for Nerds</span>
+                <span class="option-label">Stats for Nerds <span class="hotkey-badge">F3</span></span>
                 <span class="option-desc">FPS, polygons, draw calls & GPU telemetry</span>
               </div>
               <button id="btn-dev-stats-toggle" class="glass-btn-sm" aria-label="Toggle Stats for Nerds">
@@ -149,8 +156,10 @@ export class OptionsMenu {
     this.devStatsBtn = document.getElementById('btn-dev-stats-toggle');
     this.devToggleDot = document.getElementById('dev-toggle-dot');
     this.labelDevStats = document.getElementById('label-dev-stats');
+    this.devStatsRow = document.getElementById('option-row-dev-stats');
     this.leaveBtn = document.getElementById('btn-leave-match');
     this.leaveRow = document.getElementById('option-row-leave');
+    this.setInBattle(this.inBattle);
   }
 
   setupListeners() {
@@ -191,10 +200,18 @@ export class OptionsMenu {
       this.toggleDevStats();
     });
 
-    // Keyboard shortcut (Escape or 'O' key)
+    // Keyboard shortcut (Escape, 'O' key, F3)
     window.addEventListener('keydown', (e) => {
       // Don't intercept if modifier keys like Ctrl/Meta are held
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.code === 'F3') {
+        if (this.inBattle) {
+          e.preventDefault();
+          this.toggleDevStats();
+        }
+        return;
+      }
 
       if (e.key === 'Escape') {
         if (this.isOpen) {
@@ -220,6 +237,7 @@ export class OptionsMenu {
   open() {
     this.isOpen = true;
     this.dialogBackdrop?.classList.remove('hidden');
+    this.setInBattle(this.inBattle);
     this.updateFullscreenUI();
     this.updateDevStatsUI();
 
@@ -319,6 +337,7 @@ export class OptionsMenu {
   }
 
   toggleDevStats() {
+    if (!this.inBattle) return;
     this.devStatsEnabled = !this.devStatsEnabled;
     try {
       if (typeof localStorage !== 'undefined') {

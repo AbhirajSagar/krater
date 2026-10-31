@@ -740,6 +740,32 @@ body.touch-device #touch-controls.visible {
   color: #00f0ff;
 }
 
+.hotkey-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  color: #00f0ff;
+  font-family: var(--font-mono);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.settings-badge-gameplay-only {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
 .btn-leave-arena {
   color: #ff4d6d !important;
   border-color: rgba(255, 77, 109, 0.4) !important;
@@ -1225,6 +1251,7 @@ body.touch-device #touch-controls.visible {
 }
 
 .vessel-watermark-overlay {
+  display: none !important;
   position: absolute;
   bottom: 28px;
   left: 28px;
@@ -2635,36 +2662,6 @@ body.touch-device #touch-controls.visible {
   line-height: 1.3;
 }
 
-/* Credits Body */
-.credits-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.credits-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
-}
-
-.credits-role {
-  color: #00f0ff;
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-}
-
-.credits-val {
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 13px;
-}
 
 .modal-header {
   display: flex;
@@ -3213,6 +3210,75 @@ body.touch-device #touch-controls.visible {
 @keyframes hitAnim {
   0% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+}
+
+/* ================= DIRECTIONAL DAMAGE HITMARKERS ================= */
+.hud-damage-indicators-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 105;
+}
+
+.damage-indicator-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 280px;
+  height: 280px;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.damage-indicator-item.damage-pulse {
+  animation: damageHitPulse 0.14s ease-out;
+}
+
+.damage-indicator-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 10px rgba(255, 30, 60, 0.95)) drop-shadow(0 0 24px rgba(255, 0, 40, 0.65));
+}
+
+@keyframes damageHitPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.90);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.10);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.damage-edge-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100vmax;
+  height: 100vmax;
+  margin-top: -50vmax;
+  margin-left: -50vmax;
+  pointer-events: none;
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+
+.damage-edge-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 170px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 20, 50, 0.52) 0%, rgba(255, 0, 40, 0.16) 55%, transparent 80%);
 }
 
 /* Target Lock */

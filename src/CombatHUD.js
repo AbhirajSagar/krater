@@ -46,6 +46,17 @@ export class CombatHUD {
     this._leadScreenVec = new THREE.Vector3();
     this._leadCamSpaceVec = new THREE.Vector3();
 
+    // Directional damage hitmarkers state
+    this.damageIndicators = [];
+    this._nextDamageId = 1;
+    this.lastCamera = null;
+    this.lastShipPos = new THREE.Vector3();
+    this.remotePlayersManager = null;
+    this.enemyManager = null;
+    this._threatVec = new THREE.Vector3();
+    this._threatLocal = new THREE.Vector3();
+    this._camInvQuat = new THREE.Quaternion();
+
     this.initDOM();
     this.setupListeners();
   }
@@ -61,11 +72,14 @@ export class CombatHUD {
     this.container = container;
 
     this.container.innerHTML = `
-      <!-- HITMARKER OVERLAY -->
+      <!-- HITMARKER OVERLAY (OUTGOING SHOT HIT) -->
       <div class="hud-hitmarker hidden" id="hud-hitmarker">
         <div class="hit-slash hit-slash-1"></div>
         <div class="hit-slash hit-slash-2"></div>
       </div>
+
+      <!-- DIRECTIONAL DAMAGE HITMARKERS (INCOMING DAMAGE BEARING ARCS) -->
+      <div class="hud-damage-indicators-container" id="hud-damage-indicators"></div>
 
       <!-- IN-VIEW ENEMY TARGET MARKERS -->
       <div class="hud-world-targets" id="hud-world-targets"></div>
@@ -98,6 +112,7 @@ export class CombatHUD {
 
     // Elements
     this.hitmarkerEl = document.getElementById('hud-hitmarker');
+    this.damageContainer = document.getElementById('hud-damage-indicators');
     this.inViewContainer = document.getElementById('hud-world-targets');
     this.targetBracketsMap = new Map();
     this.leadPipsMap = new Map();
@@ -153,6 +168,7 @@ export class CombatHUD {
       for (const a of this.offscreenArrowsMap.values()) a.el.remove();
       this.offscreenArrowsMap.clear();
     }
+    this.clearDamageIndicators();
   }
 
   setRoomInfo(roomCode) {
@@ -209,6 +225,158 @@ export class CombatHUD {
     this._hitmarkerTimer = setTimeout(() => {
       if (this.hitmarkerEl) this.hitmarkerEl.classList.add('hidden');
     }, 110);
+  }
+
+  /**
+   * Directional damage hitmarker: indicates the 3D direction from which the player was hit.
+   * Spawns a glowing curved tactical chevron arc around the crosshair pointing towards the threat.
+   * @param {THREE.Vector3|number[]|null} sourcePos 3D world position of the threat (attacker or impact origin)
+   * @param {THREE.Vector3|number[]|null} hitPoint 3D point on the ship where damage was received
+   * @param {string|null} attackerId ID of remote player or AI enemy
+   */
+  triggerDamageIndicator(sourcePos = null, hitPoint = null, attackerId = null) {
+    if (!this.damageContainer) return;
+
+    // Helper to extract Vector3 safely from THREE.Vector3, plain object, or array
+    const toVec3 = (pos) => {
+      if (!pos) return null;
+      if (typeof pos.x === 'number' && typeof pos.y === 'number' && typeof pos.z === 'number') {
+        return new THREE.Vector3(pos.x, pos.y, pos.z);
+      }
+      if (Array.isArray(pos) && pos.length >= 3) {
+        return new THREE.Vector3(pos[0], pos[1], pos[2]);
+      }
+      return null;
+    };
+
+    // 1. Resolve 3D threat position
+    let threatPos = toVec3(sourcePos);
+    if (!threatPos && attackerId) {
+      const attacker = this.enemyManager?.getEnemy(attackerId) || this.remotePlayersManager?.getPlayer(attackerId);
+      if (attacker && attacker.root) {
+        threatPos = toVec3(attacker.root.position);
+      }
+    }
+    if (!threatPos && hitPoint) {
+      threatPos = toVec3(hitPoint);
+    }
+
+    // 2. Compute initial 2D HUD angle relative to camera view
+    let angle = 0;
+    if (threatPos && this.lastCamera && this.lastShipPos) {
+      this._threatVec.subVectors(threatPos, this.lastShipPos);
+      this._camInvQuat.copy(this.lastCamera.quaternion).invert();
+      this._threatLocal.copy(this._threatVec).applyQuaternion(this._camInvQuat);
+      angle = Math.atan2(this._threatLocal.x, -this._threatLocal.z) * (180 / Math.PI);
+    }
+
+    // 3. Prevent duplicate clutter: if an indicator is already active within 24 degrees, refresh it
+    for (const ind of this.damageIndicators) {
+      let diff = Math.abs(ind.angle - angle);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < 24) {
+        ind.life = ind.maxLife;
+        if (threatPos) ind.threatPos = threatPos;
+        if (attackerId) ind.attackerId = attackerId;
+        ind.el.classList.remove('damage-pulse');
+        void ind.el.offsetWidth;
+        ind.el.classList.add('damage-pulse');
+        return;
+      }
+    }
+
+    // 4. Create new indicator element
+    const id = this._nextDamageId++;
+    const el = document.createElement('div');
+    el.className = 'damage-indicator-item damage-pulse';
+    el.innerHTML = `
+      <svg class="damage-indicator-svg" viewBox="0 0 280 280">
+        <defs>
+          <linearGradient id="dmgGrad-${id}" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#ff1a3c" stop-opacity="1" />
+            <stop offset="65%" stop-color="#ff0033" stop-opacity="0.85" />
+            <stop offset="100%" stop-color="#800010" stop-opacity="0.1" />
+          </linearGradient>
+          <filter id="dmgGlow-${id}" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <path class="damage-arc-glow" d="M 94,52 L 87,38 Q 114,26 140,16 Q 166,26 193,38 L 186,52 Q 163,42 140,42 Q 117,42 94,52 Z" fill="url(#dmgGrad-${id})" filter="url(#dmgGlow-${id})" />
+        <path class="damage-arc-core" d="M 98,50 L 92,39 Q 116,28 140,20 Q 164,28 188,39 L 182,50 Q 161,41 140,41 Q 119,41 98,50 Z" fill="#ff2244" />
+        <polygon class="damage-chevron-pip" points="140,8 133,19 147,19" fill="#ffffff" />
+      </svg>
+    `;
+
+    const edgeEl = document.createElement('div');
+    edgeEl.className = 'damage-edge-glow';
+
+    this.damageContainer.appendChild(edgeEl);
+    this.damageContainer.appendChild(el);
+
+    this.damageIndicators.push({
+      id,
+      el,
+      edgeEl,
+      threatPos,
+      attackerId,
+      angle,
+      life: 1.25,
+      maxLife: 1.25
+    });
+  }
+
+  updateDamageIndicators(dt, camera, localShipPos) {
+    if (!this.damageIndicators || this.damageIndicators.length === 0) return;
+
+    for (let i = this.damageIndicators.length - 1; i >= 0; i--) {
+      const ind = this.damageIndicators[i];
+      ind.life -= dt;
+      if (ind.life <= 0) {
+        ind.el?.remove();
+        ind.edgeEl?.remove();
+        this.damageIndicators.splice(i, 1);
+        continue;
+      }
+
+      // Live-track attacker position if known and still active
+      if (ind.attackerId) {
+        const attacker = this.enemyManager?.getEnemy(ind.attackerId) || this.remotePlayersManager?.getPlayer(ind.attackerId);
+        if (attacker && attacker.root) {
+          ind.threatPos = attacker.root.position;
+        }
+      }
+
+      // Re-project angle in camera space as player turns or maneuvers
+      if (ind.threatPos && camera && localShipPos) {
+        this._threatVec.subVectors(ind.threatPos, localShipPos);
+        this._camInvQuat.copy(camera.quaternion).invert();
+        this._threatLocal.copy(this._threatVec).applyQuaternion(this._camInvQuat);
+        ind.angle = Math.atan2(this._threatLocal.x, -this._threatLocal.z) * (180 / Math.PI);
+      }
+
+      const progress = ind.life / ind.maxLife; // 1.0 down to 0
+      const opacity = Math.min(1.0, Math.pow(progress, 0.72));
+      const scale = 1.0 + (1.0 - progress) * 0.12;
+
+      ind.el.style.transform = `translate(-50%, -50%) rotate(${ind.angle.toFixed(1)}deg) scale(${scale.toFixed(2)})`;
+      ind.el.style.opacity = opacity.toFixed(3);
+
+      if (ind.edgeEl) {
+        ind.edgeEl.style.transform = `rotate(${ind.angle.toFixed(1)}deg)`;
+        ind.edgeEl.style.opacity = (opacity * 0.65).toFixed(3);
+      }
+    }
+  }
+
+  clearDamageIndicators() {
+    if (this.damageIndicators) {
+      for (const ind of this.damageIndicators) {
+        ind.el?.remove();
+        ind.edgeEl?.remove();
+      }
+      this.damageIndicators.length = 0;
+    }
   }
 
   showCombatBanner(text, durationMs = 2000) {
@@ -343,7 +511,7 @@ export class CombatHUD {
     this.resultsOverlayEl?.classList.add('hidden');
   }
 
-  update(dt, camera, localShipPos, localShipQuat, remotePlayersManager, asteroidField) {
+  update(dt, camera, localShipPos, localShipQuat, remotePlayersManager, asteroidField, enemyManager = null) {
     if (this.isDestroyed && this.respawnTimer > 0) {
       this.respawnTimer -= dt;
       if (this.respawnCountdownEl) {
@@ -358,7 +526,13 @@ export class CombatHUD {
 
     if (!camera || !localShipPos) return;
 
-    this.updateTacticalTargets(camera, localShipPos, remotePlayersManager);
+    this.lastCamera = camera;
+    this.lastShipPos.copy(localShipPos);
+    if (remotePlayersManager) this.remotePlayersManager = remotePlayersManager;
+    if (enemyManager) this.enemyManager = enemyManager;
+
+    this.updateDamageIndicators(dt, camera, localShipPos);
+    this.updateTacticalTargets(camera, localShipPos, enemyManager || remotePlayersManager);
     this.drawRadar(localShipPos, localShipQuat, remotePlayersManager, asteroidField);
   }
 

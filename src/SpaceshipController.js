@@ -151,6 +151,7 @@ export class SpaceshipController {
     this.onLaserFired = null;
     this.onLaserHitEnemy = null;
     this.onDamaged = null;
+    this.onIncomingDamage = null;
     this.onDestroyed = null;
 
     // Event listeners
@@ -572,8 +573,10 @@ export class SpaceshipController {
     }
 
     this.updateThrusters(dt);
-    if (this.enabled) {
+    if (this.enabled || this.isDestroyed) {
       this.updateCamera(dt);
+    }
+    if (this.enabled && !this.isDestroyed) {
       this.updateCrosshairAim();
     }
     if (this.sparkSystem) {
@@ -703,6 +706,50 @@ export class SpaceshipController {
     }
 
     this.root.position.addScaledVector(this.velocity, dt);
+
+    // 4. Check collision against Asteroid Field
+    if (this.asteroidField && this.asteroidField.enabled && this.enabled && !this.isDestroyed) {
+      const shipPos = this.root.position;
+      const shipRadius = 1.85;
+      const asteroids = this.asteroidField.asteroids;
+      for (let i = 0; i < asteroids.length; i++) {
+        const a = asteroids[i];
+        if (a.isDestroyed || !a.mesh.visible) continue;
+        const aPos = a.mesh.position;
+        const rBound = a.boundingRadius + shipRadius;
+
+        if (Math.abs(shipPos.x - aPos.x) > rBound) continue;
+        if (Math.abs(shipPos.y - aPos.y) > rBound) continue;
+        if (Math.abs(shipPos.z - aPos.z) > rBound) continue;
+
+        const distSq = shipPos.distanceToSquared(aPos);
+        if (distSq < rBound * rBound) {
+          const dist = Math.sqrt(distSq) || 1.0;
+          const overlap = rBound - dist;
+          const pushNormal = new THREE.Vector3().subVectors(shipPos, aPos).multiplyScalar(1 / dist);
+
+          this.root.position.addScaledVector(pushNormal, overlap + 0.08);
+          const collisionSpeed = Math.max(0, this.currentSpeed);
+          this.currentSpeed = Math.max(0, this.currentSpeed * 0.35);
+
+          const now = performance.now() / 1000;
+          const hitPoint = aPos.clone().addScaledVector(pushNormal, a.boundingRadius);
+
+          if ((this._lastAsteroidHitTime || 0) + 0.55 < now) {
+            this._lastAsteroidHitTime = now;
+            this.takeDamage(20, 'asteroid', hitPoint, aPos);
+            if (this.asteroidField && this.asteroidField.spawnAsteroidCollisionEffect) {
+              this.asteroidField.spawnAsteroidCollisionEffect(hitPoint, pushNormal, collisionSpeed, true);
+            }
+          } else if (collisionSpeed > 2.0 && Math.random() < 0.65) {
+            if (this.asteroidField && this.asteroidField.spawnAsteroidCollisionEffect) {
+              this.asteroidField.spawnAsteroidCollisionEffect(hitPoint, pushNormal, collisionSpeed, false);
+            }
+          }
+          break;
+        }
+      }
+    }
   }
 
   updateThrusters(dt) {
@@ -1134,6 +1181,10 @@ export class SpaceshipController {
           if (this.onLaserHitEnemy) {
             this.onLaserHitEnemy(hitInfo.player, hitInfo.hitPoint, 25);
           }
+          if (this.asteroidField && this.asteroidField.spawnLaserHitEffect) {
+            const hitNorm = new THREE.Vector3().subVectors(hitInfo.hitPoint, hitInfo.player.root.position).normalize();
+            this.asteroidField.spawnLaserHitEffect(hitInfo.hitPoint, hitNorm, p.colorHex);
+          }
           continue;
         }
       }
@@ -1161,7 +1212,7 @@ export class SpaceshipController {
     this.remotePlayersManager = mgr;
   }
 
-  takeDamage(amount, attackerId = null, hitPoint = null) {
+  takeDamage(amount, attackerId = null, hitPoint = null, sourcePos = null) {
     if (this.isDestroyed || this.invulnerableTimer > 0) return;
 
     this.shieldRegenTimer = 0.0;
@@ -1183,7 +1234,11 @@ export class SpaceshipController {
     }
 
     if (this.onDamaged) {
-      this.onDamaged(this.shield, this.health, attackerId);
+      this.onDamaged(this.shield, this.health, attackerId, hitPoint, sourcePos);
+    }
+
+    if (this.onIncomingDamage) {
+      this.onIncomingDamage(amount, attackerId, hitPoint, sourcePos);
     }
 
     if (this.health <= 0 && !this.isDestroyed) {
@@ -1196,14 +1251,67 @@ export class SpaceshipController {
       this.visualHolder.visible = false;
 
       if (this.asteroidField) {
-        this.asteroidField.spawnExplosionSparks(this.root.position, 6.0);
-        this.asteroidField.spawnShockwave(this.root.position, 8.0);
+        const shipWorldPos = new THREE.Vector3();
+        this.root.getWorldPosition(shipWorldPos);
+        this.asteroidField.spawnExplosionSparks(shipWorldPos, 6.5, true);
+        if (this.asteroidField.spawnShipWreckage) {
+          this.asteroidField.spawnShipWreckage(shipWorldPos, 3.8, 12);
+        }
+        this.asteroidField.spawnShockwave(shipWorldPos, 8.0);
       }
 
       if (this.onDestroyed) {
         this.onDestroyed(attackerId);
       }
     }
+  }
+
+  /**
+   * Restores spaceship hull health up to maxHealth.
+   * @param {number} amount
+   * @returns {number} Actual amount healed
+   */
+  heal(amount) {
+    if (this.isDestroyed || amount <= 0) return 0;
+    const oldHealth = this.health;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    const healed = this.health - oldHealth;
+    if (healed > 0 && this.onDamaged) {
+      this.onDamaged(this.shield, this.health, null);
+    }
+    return healed;
+  }
+
+  /**
+   * Restores spaceship shield energy up to maxShield.
+   * @param {number} amount
+   * @returns {number} Actual amount added
+   */
+  addShield(amount) {
+    if (this.isDestroyed || amount <= 0) return 0;
+    const oldShield = this.shield;
+    this.shield = Math.min(this.maxShield, this.shield + amount);
+    const restored = this.shield - oldShield;
+    if (restored > 0 && this.onDamaged) {
+      this.onDamaged(this.shield, this.health, null);
+    }
+    return restored;
+  }
+
+  /**
+   * Restores spaceship weapon ammunition up to maxAmmo.
+   * @param {number} amount
+   * @returns {number} Actual amount added
+   */
+  addAmmo(amount) {
+    if (this.isDestroyed || amount <= 0) return 0;
+    const oldAmmo = this.currentAmmo;
+    this.currentAmmo = Math.min(this.maxAmmo, this.currentAmmo + amount);
+    const added = this.currentAmmo - oldAmmo;
+    if (added > 0 && this.onAmmoChanged) {
+      this.onAmmoChanged(this.currentAmmo, this.maxAmmo);
+    }
+    return added;
   }
 
   respawn(position = null) {
