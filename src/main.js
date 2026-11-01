@@ -79,6 +79,8 @@ loadingScreen.setProgress(15);
 
 // Game Flow State & Runtime Component References
 let currentGameState = 'MENU'; // 'MENU', 'STAGING', 'BATTLE'
+let isSinglePlayerMode = false;
+let hitPauseTimer = 0;
 let localKills = 0;
 let localDeaths = 0;
 let localScore = 0;
@@ -315,6 +317,8 @@ window._updateMenuLayout = updateMenuLayout;
 
 function enterMainMenu(advanceSkybox = false) {
   currentGameState = 'MENU';
+  isSinglePlayerMode = false;
+  hitPauseTimer = 0;
   if (optionsMenu) optionsMenu.setInBattle(false);
   if (devStatsHUD) devStatsHUD.setVisible(false);
   if (spaceship) {
@@ -357,6 +361,8 @@ function enterMainMenu(advanceSkybox = false) {
 
 function startBattle(room = null, isSolo = false) {
   currentGameState = 'BATTLE';
+  isSinglePlayerMode = Boolean(isSolo || !room || !client?.isConnected || !client?.room);
+  hitPauseTimer = 0;
   if (optionsMenu) optionsMenu.setInBattle(true);
   if (devStatsHUD) devStatsHUD.setVisible(optionsMenu.devStatsEnabled);
   if (lobbyUI) lobbyUI.hideAll();
@@ -475,13 +481,13 @@ function startBattle(room = null, isSolo = false) {
       });
       // Start dynamic auto-replenish spawner
       enemySpawner.startAutoSpawn({
-        maxEnemies: 3,
-        interval: 5.0,
+        maxEnemies: 2,
+        interval: 8.0,
         archetypes: ['drone', 'scout', 'fighter', 'interceptor'],
-        minDist: 65,
-        maxDist: 110,
+        minDist: 75,
+        maxDist: 115,
         autoRespawn: true,
-        respawnDelay: 3.5
+        respawnDelay: 6.0
       });
     }
   }
@@ -502,6 +508,49 @@ function syncScoreboard() {
   combatHUD.updateScoreboard(all, client.playerId);
 }
 
+// Slow Motion Feedback on Spaceship Explosion (Single Player Mode Only)
+const SLOW_MO_TIME_SCALE = 0.2; // 20% speed (cinematic slow motion)
+const BASE_FREEZE_ENEMY_DURATION = 0.085; // 85ms base duration
+const BASE_FREEZE_PLAYER_DURATION = 0.13; // 130ms base duration
+const SLOW_MO_DURATION_MULTIPLIER = 1.5; // 1.5 times the previous freeze duration
+
+function triggerHitPause(type = 'enemy', position = null) {
+  // Strictly active in single player battle mode only!
+  if (!isSinglePlayerMode || currentGameState !== 'BATTLE') return;
+  if (client && client.isConnected && client.room) return; // Strict guard against active multiplayer rooms
+
+  const isPlayerDeath = type === 'player';
+  // 1.5 times the previous freeze duration (85ms * 1.5 = 127.5ms for enemy, 130ms * 1.5 = 195ms for player death)
+  const baseDuration = isPlayerDeath ? BASE_FREEZE_PLAYER_DURATION : BASE_FREEZE_ENEMY_DURATION;
+  const duration = baseDuration * SLOW_MO_DURATION_MULTIPLIER;
+  hitPauseTimer = Math.max(hitPauseTimer, duration);
+
+  // Screen impact flash & vignette in CombatHUD
+  if (combatHUD && typeof combatHUD.triggerHitPauseEffect === 'function') {
+    combatHUD.triggerHitPauseEffect(isPlayerDeath, Math.round(duration * 1000));
+  }
+
+  // Camera micro-shake impulse
+  if (spaceship && typeof spaceship.triggerCameraShake === 'function') {
+    spaceship.triggerCameraShake(isPlayerDeath ? 0.85 : 0.55);
+  }
+
+  // Gamepad haptic impulse (if controller connected)
+  if (typeof navigator !== 'undefined' && navigator.getGamepads) {
+    const gps = navigator.getGamepads();
+    for (const gp of gps) {
+      if (gp?.vibrationActuator?.playEffect) {
+        gp.vibrationActuator.playEffect('dual-rumble', {
+          startDelay: 0,
+          duration: Math.round(duration * 1000),
+          weakMagnitude: isPlayerDeath ? 0.9 : 0.65,
+          strongMagnitude: isPlayerDeath ? 1.0 : 0.85
+        }).catch(() => {});
+      }
+    }
+  }
+}
+
 // 6. Main Render & Simulation Loop (Runs immediately so no black screen can occur)
 const clock = new THREE.Clock();
 let menuFloatTime = 0;
@@ -510,7 +559,19 @@ let lastTransformSync = 0;
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.033);
+  const rawDelta = clock.getDelta();
+  let dt = Math.min(rawDelta, 0.033);
+
+  // Singleplayer Slow Motion: scale simulation time (20% speed) while keeping visual rendering active
+  let isSlowMo = false;
+  if (isSinglePlayerMode && currentGameState === 'BATTLE' && hitPauseTimer > 0) {
+    hitPauseTimer -= rawDelta;
+    if (hitPauseTimer <= 0) {
+      hitPauseTimer = 0;
+    }
+    isSlowMo = true;
+    dt = dt * SLOW_MO_TIME_SCALE;
+  }
 
   // Update Local Spaceship & Environment
   if (spaceship) {
@@ -944,8 +1005,14 @@ function bindNetworkEvents() {
     };
 
     spaceship.onDestroyed = (killerId) => {
+      triggerHitPause('player', spaceship?.root?.position);
       localDeaths += 1;
       if (touchControls) touchControls.resetAll();
+      if (touchControlsContainer) touchControlsContainer.classList.remove('visible');
+      if (crosshairContainer) {
+        crosshairContainer.classList.remove('visible');
+        crosshairContainer.style.display = 'none';
+      }
 
       // Broadcast kill to arena so killer gets credit and all pilots see explosion
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
@@ -1181,6 +1248,11 @@ async function initPipeline() {
   enemyManager.setRemotePlayerManager(remotePlayersManager);
   itemManager = new ItemManager(scene);
 
+  // Single player hit pause feedback on enemy spaceship destruction
+  enemyManager.on('shipExplosion', ({ position }) => {
+    triggerHitPause('enemy', position);
+  });
+
   enemySpawner = new EnemySpawner(enemyManager, {
     mode: 'singleplayer',
     isHost: true,
@@ -1226,6 +1298,36 @@ async function initPipeline() {
       );
 
       spaceship.respawn(spawnPos);
+      spaceship.enabled = true;
+
+      // Restore combat crosshair
+      if (crosshairContainer) {
+        crosshairContainer.style.display = spaceship.cameraMode === 2 ? 'none' : 'flex';
+        crosshairContainer.classList.add('visible');
+      }
+
+      // Restore touch controls for touch/mobile devices
+      if ((isTouchOrMobileDevice() || document.body.classList.contains('touch-device')) && touchControlsContainer) {
+        touchControlsContainer.classList.add('visible');
+        if (touchControls) touchControls.resetAll();
+      }
+
+      // Restore ammo HUD
+      if (minimalAmmoHUD) {
+        minimalAmmoHUD.classList.add('visible');
+        updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+      }
+
+      // Update Combat HUD vitals
+      if (combatHUD) {
+        combatHUD.updateLocalVitals({
+          shield: spaceship.shield,
+          hull: spaceship.health,
+          maxShield: spaceship.maxShield,
+          maxHull: spaceship.maxHealth
+        });
+        combatHUD.clearDamageIndicators();
+      }
 
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
         client.relay('PLAYER_RESPAWNED', { playerId: client.playerId, pos: spaceship.root.position.toArray() });

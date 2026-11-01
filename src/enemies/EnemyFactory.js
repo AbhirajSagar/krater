@@ -14,78 +14,78 @@ export const BUILTIN_ARCHETYPES = {
     name: 'ROGUE DRONE',
     shipIndex: 1,
     themeKey: 'Red',
-    health: 60,
-    shield: 40,
+    health: 40,
+    shield: 20,
     radius: 3.2,
     scoreValue: 100,
     behavior: 'orbit',
-    behaviorOptions: { radius: 55, speed: 0.36, wobbleAmp: 5, wobbleFreq: 0.3, anchor: 'player' },
-    weapon: { enabled: true, fireInterval: 1.3, burstCount: 1, damage: 10, range: 140, accuracy: 0.85, color: '#ff3344' }
+    behaviorOptions: { radius: 50, speed: 0.28, wobbleAmp: 4, wobbleFreq: 0.25, anchor: 'player' },
+    weapon: { enabled: true, fireInterval: 2.2, burstCount: 1, damage: 5, range: 130, accuracy: 0.60, color: '#ff3344' }
   },
   scout: {
     archetype: 'scout',
     name: 'RECON SCOUT',
     shipIndex: 0,
     themeKey: 'Yellow',
-    health: 55,
-    shield: 35,
-    radius: 2.8,
+    health: 45,
+    shield: 25,
+    radius: 3.0,
     scoreValue: 150,
     behavior: 'chase',
-    behaviorOptions: { maxSpeed: 46, attackSpeed: 52, turnSpeed: 1.8, combatDistance: 42, breakawayDistance: 20 },
-    weapon: { enabled: true, fireInterval: 1.1, burstCount: 2, burstInterval: 0.12, damage: 12, range: 155, accuracy: 0.88, color: '#ffcc00' }
+    behaviorOptions: { maxSpeed: 30, attackSpeed: 38, turnSpeed: 1.1, combatDistance: 45, breakawayDistance: 22 },
+    weapon: { enabled: true, fireInterval: 1.8, burstCount: 2, burstInterval: 0.16, damage: 6, range: 140, accuracy: 0.65, color: '#ffcc00' }
   },
   fighter: {
     archetype: 'fighter',
     name: 'PIRATE FIGHTER',
     shipIndex: 2,
     themeKey: 'Orange',
-    health: 85,
-    shield: 65,
-    radius: 3.6,
+    health: 65,
+    shield: 45,
+    radius: 3.8,
     scoreValue: 250,
     behavior: 'chase',
-    behaviorOptions: { maxSpeed: 42, attackSpeed: 50, turnSpeed: 1.5, combatDistance: 40, breakawayDistance: 20 },
-    weapon: { enabled: true, fireInterval: 1.4, burstCount: 2, burstInterval: 0.14, damage: 16, range: 165, accuracy: 0.90, color: '#ff6600' }
+    behaviorOptions: { maxSpeed: 27, attackSpeed: 34, turnSpeed: 1.0, combatDistance: 42, breakawayDistance: 22 },
+    weapon: { enabled: true, fireInterval: 2.0, burstCount: 2, burstInterval: 0.16, damage: 7, range: 150, accuracy: 0.68, color: '#ff6600' }
   },
   interceptor: {
     archetype: 'interceptor',
     name: 'VOID INTERCEPTOR',
     shipIndex: 3,
     themeKey: 'Cyan',
-    health: 75,
-    shield: 55,
-    radius: 3.4,
+    health: 55,
+    shield: 35,
+    radius: 3.5,
     scoreValue: 300,
     behavior: 'chase',
-    behaviorOptions: { maxSpeed: 50, attackSpeed: 58, turnSpeed: 1.7, combatDistance: 36, breakawayDistance: 18 },
-    weapon: { enabled: true, fireInterval: 0.95, burstCount: 3, burstInterval: 0.10, damage: 14, range: 175, accuracy: 0.92, color: '#00e5ff' }
+    behaviorOptions: { maxSpeed: 33, attackSpeed: 40, turnSpeed: 1.2, combatDistance: 38, breakawayDistance: 20 },
+    weapon: { enabled: true, fireInterval: 1.6, burstCount: 2, burstInterval: 0.14, damage: 6, range: 155, accuracy: 0.70, color: '#00e5ff' }
   },
   bomber: {
     archetype: 'bomber',
     name: 'HEAVY BOMBER',
     shipIndex: 4,
     themeKey: 'Purple',
-    health: 180,
-    shield: 130,
-    radius: 4.6,
+    health: 120,
+    shield: 70,
+    radius: 4.8,
     scoreValue: 500,
     behavior: 'chase',
-    behaviorOptions: { maxSpeed: 28, attackSpeed: 34, turnSpeed: 1.1, combatDistance: 50, breakawayDistance: 24 },
-    weapon: { enabled: true, fireInterval: 2.2, burstCount: 1, damage: 35, range: 190, accuracy: 0.86, color: '#b026ff' }
+    behaviorOptions: { maxSpeed: 20, attackSpeed: 25, turnSpeed: 0.7, combatDistance: 65, breakawayDistance: 32 },
+    weapon: { enabled: true, fireInterval: 2.8, burstCount: 1, damage: 16, range: 170, accuracy: 0.62, color: '#b026ff' }
   },
   sentinel: {
     archetype: 'sentinel',
     name: 'DEFENSE SENTINEL',
     shipIndex: 5,
     themeKey: 'Green',
-    health: 140,
-    shield: 100,
-    radius: 4.0,
+    health: 90,
+    shield: 50,
+    radius: 4.2,
     scoreValue: 350,
     behavior: 'stationary',
-    behaviorOptions: { faceTarget: true, turnSpeed: 2.2 },
-    weapon: { enabled: true, fireInterval: 1.6, burstCount: 2, burstInterval: 0.15, damage: 20, range: 210, accuracy: 0.92, color: '#39ff14' }
+    behaviorOptions: { faceTarget: true, turnSpeed: 1.4 },
+    weapon: { enabled: true, fireInterval: 2.2, burstCount: 2, burstInterval: 0.18, damage: 9, range: 180, accuracy: 0.70, color: '#39ff14' }
   }
 };
 

@@ -176,18 +176,19 @@ export class EnemyManager {
 
       const pPos = enemy.root.position;
       const r = enemy.radius;
+      const hitRadius = r * 1.8 + 1.8; // Generous arcade bullet magnetism
 
       // Fast AABB rejection
-      if (Math.abs(oldPos.x - pPos.x) > r + 10 && Math.abs(newPos.x - pPos.x) > r + 10) continue;
-      if (Math.abs(oldPos.y - pPos.y) > r + 10 && Math.abs(newPos.y - pPos.y) > r + 10) continue;
-      if (Math.abs(oldPos.z - pPos.z) > r + 10 && Math.abs(newPos.z - pPos.z) > r + 10) continue;
+      if (Math.abs(oldPos.x - pPos.x) > hitRadius + 10 && Math.abs(newPos.x - pPos.x) > hitRadius + 10) continue;
+      if (Math.abs(oldPos.y - pPos.y) > hitRadius + 10 && Math.abs(newPos.y - pPos.y) > hitRadius + 10) continue;
+      if (Math.abs(oldPos.z - pPos.z) > hitRadius + 10 && Math.abs(newPos.z - pPos.z) > hitRadius + 10) continue;
 
       _v.subVectors(pPos, oldPos);
       const t = THREE.MathUtils.clamp(_v.dot(_seg) / segLenSq, 0, 1);
       _closest.copy(oldPos).addScaledVector(_seg, t);
 
       const distSq = _closest.distanceToSquared(pPos);
-      if (distSq <= r * r) {
+      if (distSq <= hitRadius * hitRadius) {
         return {
           player: enemy,
           hitPoint: _closest.clone()
@@ -223,9 +224,9 @@ export class EnemyManager {
       _screenPos.copy(enemy.root.position).project(camera);
       const shipScreenDist = Math.hypot(_screenPos.x, _screenPos.y);
 
-      // Predictive lead calculation (lasers travel at 160 m/s)
+      // Predictive lead calculation (lasers travel at 280 m/s)
       const worldDist = enemy.root.position.distanceTo(camera.position);
-      const tLead = worldDist / 160.0;
+      const tLead = worldDist / 280.0;
       _leadWorld.copy(enemy.root.position).addScaledVector(enemy.velocity, tLead);
 
       _leadScreenPos.copy(_leadWorld).project(camera);
@@ -268,6 +269,7 @@ export class EnemyManager {
       this.asteroidField.spawnShockwave(pos, 6.0);
     }
     sounds.playExplosion(1.4);
+    this.emit('shipExplosion', { position: pos });
   }
 
   // --- Enemy Lasers Pool ---

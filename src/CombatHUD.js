@@ -81,6 +81,9 @@ export class CombatHUD {
         <div class="hit-slash hit-slash-2"></div>
       </div>
 
+      <!-- HIT PAUSE EXPLOSION IMPACT FLASH -->
+      <div class="hud-hitpause-flash" id="hud-hitpause-flash"></div>
+
       <!-- DIRECTIONAL DAMAGE HITMARKERS (INCOMING DAMAGE BEARING ARCS) -->
       <div class="hud-damage-indicators-container" id="hud-damage-indicators"></div>
 
@@ -131,20 +134,54 @@ export class CombatHUD {
     this.manualRespawnBtn = document.getElementById('btn-manual-respawn');
     this.respawnLeaveBtn = document.getElementById('btn-respawn-leave');
 
+    this.hitpauseFlashEl = document.getElementById('hud-hitpause-flash');
     this._hitmarkerTimer = null;
+    this._hitpauseTimer = null;
   }
 
   setupListeners() {
-    this.manualRespawnBtn?.addEventListener('click', () => {
+    const triggerRespawn = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (this.onRespawnRequest) {
         this.onRespawnRequest();
       }
-    });
+    };
 
-    this.respawnLeaveBtn?.addEventListener('click', () => {
-      this.hideDestroyedOverlay();
-      if (this.onLeaveMatch) {
-        this.onLeaveMatch();
+    if (this.manualRespawnBtn) {
+      this.manualRespawnBtn.addEventListener('click', triggerRespawn);
+      this.manualRespawnBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+      });
+      this.manualRespawnBtn.addEventListener('touchend', triggerRespawn, { passive: false });
+    }
+
+    if (this.respawnLeaveBtn) {
+      const triggerLeave = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        this.hideDestroyedOverlay();
+        if (this.onLeaveMatch) {
+          this.onLeaveMatch();
+        }
+      };
+      this.respawnLeaveBtn.addEventListener('click', triggerLeave);
+      this.respawnLeaveBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+      });
+      this.respawnLeaveBtn.addEventListener('touchend', triggerLeave, { passive: false });
+    }
+
+    // Space / Enter quick-respawn shortcut
+    window.addEventListener('keydown', (e) => {
+      if (!this.isDestroyed) return;
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        triggerRespawn(e);
       }
     });
   }
@@ -228,6 +265,26 @@ export class CombatHUD {
     this._hitmarkerTimer = setTimeout(() => {
       if (this.hitmarkerEl) this.hitmarkerEl.classList.add('hidden');
     }, 110);
+  }
+
+  /**
+   * Triggers a cinematic slow motion impact flash feedback overlay on spaceship explosion.
+   * @param {boolean} isPlayerDeath True if player ship exploded, false for enemy ship explosion
+   * @param {number} durationMs Flash duration matching slow motion effect
+   */
+  triggerHitPauseEffect(isPlayerDeath = false, durationMs = 130) {
+    if (!this.hitpauseFlashEl) return;
+    this.hitpauseFlashEl.classList.toggle('player-death', isPlayerDeath);
+    this.hitpauseFlashEl.classList.remove('active');
+    void this.hitpauseFlashEl.offsetWidth; // Force reflow
+    this.hitpauseFlashEl.classList.add('active');
+
+    if (this._hitpauseTimer) clearTimeout(this._hitpauseTimer);
+    this._hitpauseTimer = setTimeout(() => {
+      if (this.hitpauseFlashEl) {
+        this.hitpauseFlashEl.classList.remove('active');
+      }
+    }, durationMs);
   }
 
   /**
@@ -501,11 +558,24 @@ export class CombatHUD {
       this.respawnCountdownEl.textContent = Math.ceil(this.respawnTimer);
     }
     this.respawnOverlayEl?.classList.remove('hidden');
+    this.container?.classList.add('overlay-active');
+
+    // Ensure crosshair and touch controls do not overlap or block destroyed overlay menu
+    const crosshair = document.getElementById('crosshair-container');
+    if (crosshair) {
+      crosshair.classList.remove('visible');
+      crosshair.style.display = 'none';
+    }
+    const touchControls = document.getElementById('touch-controls');
+    if (touchControls) {
+      touchControls.classList.remove('visible');
+    }
   }
 
   hideDestroyedOverlay() {
     this.isDestroyed = false;
     this.respawnOverlayEl?.classList.add('hidden');
+    this.container?.classList.remove('overlay-active');
   }
 
   showResults(title, mvpName, statsHtml) {
@@ -618,7 +688,7 @@ export class CombatHUD {
         }
 
         // --- PREDICTIVE LEAD AIM PIP ---
-        const tLead = dist / 160.0;
+        const tLead = dist / 280.0;
         this._leadScratchVec.copy(p.root.position).addScaledVector(p.velocity, tLead);
         this._leadCamSpaceVec.copy(this._leadScratchVec).applyMatrix4(camera.matrixWorldInverse);
         const leadIsInFront = this._leadCamSpaceVec.z < -0.1;

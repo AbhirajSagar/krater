@@ -3090,6 +3090,21 @@ body.touch-device #touch-controls.visible {
   opacity: 1 !important;
 }
 
+.combat-hud-root.overlay-active,
+.combat-hud-root:has(.hud-respawn-backdrop:not(.hidden)),
+.combat-hud-root:has(.hud-results-backdrop:not(.hidden)) {
+  z-index: 2000 !important;
+  pointer-events: auto !important;
+}
+
+.combat-hud-root.overlay-active ~ #crosshair-container,
+body:has(.hud-respawn-backdrop:not(.hidden)) #crosshair-container {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .hud-top-bar,
 .hud-vitals-card,
 .hud-chat-card,
@@ -3210,6 +3225,26 @@ body.touch-device #touch-controls.visible {
   height: 22px;
   transform: translate(-50%, -50%);
   pointer-events: none;
+}
+
+/* Slow Motion Impact Feedback (Singleplayer Spaceship Explosion) */
+.hud-hitpause-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1200;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.24) 0%, rgba(0, 240, 255, 0.15) 35%, rgba(0, 0, 0, 0.32) 100%);
+  mix-blend-mode: screen;
+  transition: opacity 0.05s ease-out;
+}
+
+.hud-hitpause-flash.active {
+  opacity: 1;
+}
+
+.hud-hitpause-flash.player-death {
+  background: radial-gradient(circle at center, rgba(255, 90, 50, 0.32) 0%, rgba(255, 30, 30, 0.22) 42%, rgba(20, 0, 0, 0.48) 100%);
 }
 
 .hit-slash {
@@ -3758,22 +3793,25 @@ body.touch-device .hud-radar-card {
 /* Respawn Backdrop */
 .hud-respawn-backdrop,
 .hud-results-backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: fixed;
+  inset: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
-  z-index: 90;
+  pointer-events: auto !important;
+  z-index: 2000 !important;
 }
 
 .respawn-glass-card,
 .results-glass-card {
+  position: relative;
+  z-index: 2001 !important;
+  pointer-events: auto !important;
   background: var(--glass-bg-elevated);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
@@ -3803,6 +3841,16 @@ body.touch-device .hud-radar-card {
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 2002 !important;
+  pointer-events: auto !important;
+}
+
+.respawn-actions-row button {
+  position: relative;
+  z-index: 2003 !important;
+  pointer-events: auto !important;
+  cursor: pointer;
 }
 
 .btn-secondary-outline {

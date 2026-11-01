@@ -503,7 +503,7 @@ export class SpaceshipController {
 
     // Check remote enemy players in aim cone first (using predictive lead point when moving)
     if (this.remotePlayersManager) {
-      const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.20);
+      const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.35);
       if (enemyTarget && enemyTarget.player) {
         this.crosshairContainer.classList.add('target-locked');
         _scratchAimTarget.copy(enemyTarget.aimPoint || enemyTarget.leadPoint || enemyTarget.player.root.position);
@@ -1090,7 +1090,7 @@ export class SpaceshipController {
       _forward.set(0, 0, -1);
       p.group.quaternion.setFromUnitVectors(_forward, _pushNormal);
       p.dir.copy(_pushNormal);
-      p.speed = 160.0;
+      p.speed = 280.0;
       p.life = 0.0;
       p.maxLife = 1.4;
       p.colorHex = colorHex;
@@ -1102,7 +1102,7 @@ export class SpaceshipController {
 
     sounds.playLaser();
     if (this.onLaserFired) {
-      this.onLaserFired({ points, dir: _shipDir.toArray(), speed: 160.0 });
+      this.onLaserFired({ points, dir: _shipDir.toArray(), speed: 280.0 });
     }
   }
 
@@ -1195,7 +1195,7 @@ export class SpaceshipController {
           p.group.visible = false;
           this.activeProjectiles.splice(i, 1);
           if (this.onLaserHitEnemy) {
-            this.onLaserHitEnemy(hitInfo.player, hitInfo.hitPoint, 25);
+            this.onLaserHitEnemy(hitInfo.player, hitInfo.hitPoint, 36);
           }
           if (this.asteroidField && this.asteroidField.spawnLaserHitEffect) {
             _pushNormal.subVectors(hitInfo.hitPoint, hitInfo.player.root.position).normalize();
@@ -1266,6 +1266,11 @@ export class SpaceshipController {
       this.triggerCameraShake(0.85);
       this.visualHolder.visible = false;
 
+      if (this.crosshairContainer) {
+        this.crosshairContainer.classList.remove('visible');
+        this.crosshairContainer.style.display = 'none';
+      }
+
       if (this.asteroidField) {
         this.root.getWorldPosition(_cockpitPos);
         this.asteroidField.spawnExplosionSparks(_cockpitPos, 6.5, true);
@@ -1331,6 +1336,7 @@ export class SpaceshipController {
 
   respawn(position = null) {
     this.isDestroyed = false;
+    this.enabled = true;
     this.health = this.maxHealth;
     this.shield = this.maxShield;
     this.invulnerableTimer = 3.0;
@@ -1350,6 +1356,11 @@ export class SpaceshipController {
       const angle = Math.random() * Math.PI * 2;
       const r = 90 + Math.random() * 80;
       this.root.position.set(Math.cos(angle) * r, (Math.random() - 0.5) * 40, Math.sin(angle) * r);
+    }
+
+    if (this.crosshairContainer) {
+      this.crosshairContainer.style.display = this.cameraMode === 2 ? 'none' : 'flex';
+      this.crosshairContainer.classList.add('visible');
     }
 
     sounds.playClick();

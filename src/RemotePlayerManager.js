@@ -274,18 +274,19 @@ export class RemotePlayerManager {
 
       const pPos = player.root.position;
       const r = player.radius;
+      const hitRadius = r * 1.8 + 1.8; // Generous arcade bullet magnetism
 
       // Fast AABB rejection
-      if (Math.abs(oldPos.x - pPos.x) > r + 10 && Math.abs(newPos.x - pPos.x) > r + 10) continue;
-      if (Math.abs(oldPos.y - pPos.y) > r + 10 && Math.abs(newPos.y - pPos.y) > r + 10) continue;
-      if (Math.abs(oldPos.z - pPos.z) > r + 10 && Math.abs(newPos.z - pPos.z) > r + 10) continue;
+      if (Math.abs(oldPos.x - pPos.x) > hitRadius + 10 && Math.abs(newPos.x - pPos.x) > hitRadius + 10) continue;
+      if (Math.abs(oldPos.y - pPos.y) > hitRadius + 10 && Math.abs(newPos.y - pPos.y) > hitRadius + 10) continue;
+      if (Math.abs(oldPos.z - pPos.z) > hitRadius + 10 && Math.abs(newPos.z - pPos.z) > hitRadius + 10) continue;
 
       _v.subVectors(pPos, oldPos);
       const t = THREE.MathUtils.clamp(_v.dot(_seg) / segLenSq, 0, 1);
       _closest.copy(oldPos).addScaledVector(_seg, t);
 
       const distSq = _closest.distanceToSquared(pPos);
-      if (distSq <= player.radius * player.radius) {
+      if (distSq <= hitRadius * hitRadius) {
         return {
           player,
           hitPoint: _closest.clone()
