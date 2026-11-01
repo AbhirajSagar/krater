@@ -240,34 +240,36 @@ export class CombatHUD {
   triggerDamageIndicator(sourcePos = null, hitPoint = null, attackerId = null) {
     if (!this.damageContainer) return;
 
-    // Helper to extract Vector3 safely from THREE.Vector3, plain object, or array
-    const toVec3 = (pos) => {
-      if (!pos) return null;
+    // Helper to extract Vector3 safely without unnecessary allocations
+    const setThreatPos = (pos) => {
+      if (!pos) return false;
       if (typeof pos.x === 'number' && typeof pos.y === 'number' && typeof pos.z === 'number') {
-        return new THREE.Vector3(pos.x, pos.y, pos.z);
+        this._scratchVec.set(pos.x, pos.y, pos.z);
+        return true;
       }
       if (Array.isArray(pos) && pos.length >= 3) {
-        return new THREE.Vector3(pos[0], pos[1], pos[2]);
+        this._scratchVec.set(pos[0], pos[1], pos[2]);
+        return true;
       }
-      return null;
+      return false;
     };
 
     // 1. Resolve 3D threat position
-    let threatPos = toVec3(sourcePos);
-    if (!threatPos && attackerId) {
+    let hasThreatPos = setThreatPos(sourcePos);
+    if (!hasThreatPos && attackerId) {
       const attacker = this.enemyManager?.getEnemy(attackerId) || this.remotePlayersManager?.getPlayer(attackerId);
       if (attacker && attacker.root) {
-        threatPos = toVec3(attacker.root.position);
+        hasThreatPos = setThreatPos(attacker.root.position);
       }
     }
-    if (!threatPos && hitPoint) {
-      threatPos = toVec3(hitPoint);
+    if (!hasThreatPos && hitPoint) {
+      hasThreatPos = setThreatPos(hitPoint);
     }
 
     // 2. Compute initial 2D HUD angle relative to camera view
     let angle = 0;
-    if (threatPos && this.lastCamera && this.lastShipPos) {
-      this._threatVec.subVectors(threatPos, this.lastShipPos);
+    if (hasThreatPos && this.lastCamera && this.lastShipPos) {
+      this._threatVec.subVectors(this._scratchVec, this.lastShipPos);
       this._camInvQuat.copy(this.lastCamera.quaternion).invert();
       this._threatLocal.copy(this._threatVec).applyQuaternion(this._camInvQuat);
       angle = Math.atan2(this._threatLocal.x, -this._threatLocal.z) * (180 / Math.PI);
@@ -279,7 +281,10 @@ export class CombatHUD {
       if (diff > 180) diff = 360 - diff;
       if (diff < 24) {
         ind.life = ind.maxLife;
-        if (threatPos) ind.threatPos = threatPos;
+        if (hasThreatPos) {
+          if (!ind.threatPos) ind.threatPos = new THREE.Vector3();
+          ind.threatPos.copy(this._scratchVec);
+        }
         if (attackerId) ind.attackerId = attackerId;
         ind.el.classList.remove('damage-pulse');
         void ind.el.offsetWidth;
@@ -321,7 +326,7 @@ export class CombatHUD {
       id,
       el,
       edgeEl,
-      threatPos,
+      threatPos: hasThreatPos ? this._scratchVec.clone() : null,
       attackerId,
       angle,
       life: 1.25,

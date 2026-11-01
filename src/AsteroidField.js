@@ -27,6 +27,52 @@ const _fastHitPoint = new THREE.Vector3();
 const _fastHitNormal = new THREE.Vector3();
 const _hitNorm = new THREE.Vector3();
 const _worldPosScratch = new THREE.Vector3();
+const _vFlashPos = new THREE.Vector3();
+const _vSprayNorm = new THREE.Vector3();
+const _colorScratch = new THREE.Color();
+const _colorMixScratch = new THREE.Color();
+const _whiteColor = new THREE.Color(1, 1, 1);
+
+// Static pre-allocated color palettes for debris and needle sparks (zero runtime allocations)
+const ROCK_EMBER_COLORS = [
+  new THREE.Color('#ffaa33'),
+  new THREE.Color('#ff6611'),
+  new THREE.Color('#d4a373'),
+  new THREE.Color('#e0e0e0'),
+  new THREE.Color('#8d99ae')
+];
+
+const COLLISION_METAL_COLORS = [
+  new THREE.Color('#ffffff'), // White-hot
+  new THREE.Color('#fff275'), // Bright incandescent yellow
+  new THREE.Color('#ffaa00'), // Amber gold
+  new THREE.Color('#ff5500'), // Fiery orange
+  new THREE.Color('#38bdf8')  // Blue electric shield spark
+];
+
+const COLLISION_ROCK_COLORS = [
+  new THREE.Color('#ff8833'),
+  new THREE.Color('#d4a373'),
+  new THREE.Color('#a89f91'),
+  new THREE.Color('#6c757d'),
+  new THREE.Color('#343a40')
+];
+
+const SHIP_NEEDLE_COLORS = [
+  new THREE.Color('#00ffff'), // Cyan shield capacitor
+  new THREE.Color('#38bdf8'), // Electric sky blue
+  new THREE.Color('#ffffff'), // White-hot hull armor
+  new THREE.Color('#ffaa00'), // Superheated copper
+  new THREE.Color('#ff5500')  // Fiery propellant
+];
+
+const ASTEROID_NEEDLE_COLORS = [
+  new THREE.Color('#ffffff'), // White-hot rock spark
+  new THREE.Color('#fff4b8'), // Incandescent golden yellow
+  new THREE.Color('#ffaa00'), // Amber mineral ember
+  new THREE.Color('#ff6600'), // Fiery basalt streak
+  new THREE.Color('#ff3300')  // Deep incandescent red
+];
 
 // Fast 3D Value/Perlin Noise for geometry deformation
 function createNoise3D(seed = 101) {
@@ -335,6 +381,13 @@ export class AsteroidField {
           sw.mesh.visible = false;
         }
       }
+      if (this.flashLights) {
+        for (const fl of this.flashLights) {
+          fl.active = false;
+          fl.light.intensity = 0.0;
+          fl.light.position.set(0, -99999, 0);
+        }
+      }
     }
     this._meshesNeedUpdate = true;
   }
@@ -603,46 +656,47 @@ export class AsteroidField {
     this.shockwaves = [];
     const quadGeom = new THREE.PlaneGeometry(2.0, 2.0);
 
+    this.shockwaveMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0xff6618) },
+        uOpacity: { value: 0.0 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main() {
+          vec2 coord = vUv - vec2(0.5);
+          float dist = length(coord) * 2.0;
+          if (dist > 1.0) discard;
+          // Soft feathered Gaussian energy band with glowing core - zero hard geometric borders
+          float band = exp(-pow((dist - 0.74) / 0.14, 2.0));
+          float innerFade = smoothstep(0.18, 0.60, dist);
+          float alpha = band * innerFade * uOpacity;
+          gl_FragColor = vec4(uColor, alpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+
     for (let i = 0; i < this.maxShockwaves; i++) {
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          uColor: { value: new THREE.Color(0xff6618) },
-          uOpacity: { value: 0.0 }
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform vec3 uColor;
-          uniform float uOpacity;
-          varying vec2 vUv;
-          void main() {
-            vec2 coord = vUv - vec2(0.5);
-            float dist = length(coord) * 2.0;
-            if (dist > 1.0) discard;
-            // Soft feathered Gaussian energy band with glowing core - zero hard geometric borders
-            float band = exp(-pow((dist - 0.74) / 0.14, 2.0));
-            float innerFade = smoothstep(0.18, 0.60, dist);
-            float alpha = band * innerFade * uOpacity;
-            gl_FragColor = vec4(uColor, alpha);
-          }
-        `,
-        transparent: true,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-      });
-      const mesh = new THREE.Mesh(quadGeom, mat);
+      const mesh = new THREE.Mesh(quadGeom, this.shockwaveMaterial);
       mesh.visible = false;
       this.scene.add(mesh);
 
       this.shockwaves.push({
         mesh,
-        mat,
+        mat: this.shockwaveMaterial,
         active: false,
         life: 0,
         maxLife: 0.32,
@@ -652,11 +706,16 @@ export class AsteroidField {
   }
 
   setupFlashLights() {
-    this.maxFlashLights = 8;
+    // Exactly 4 pre-allocated impact lights.
+    // Keeping visible = true and numPointLights CONSTANT is vital in Three.js WebGL:
+    // Any mutation in active point light count invalidates shader caches and triggers
+    // synchronous recompilation of all scene PBR materials, causing severe frame drops.
+    this.maxFlashLights = 4;
     this.flashLights = [];
     for (let i = 0; i < this.maxFlashLights; i++) {
-      const light = new THREE.PointLight(0xffffff, 0, 40, 2.0);
-      light.visible = false;
+      const light = new THREE.PointLight(0xffffff, 0.0, 40, 2.0);
+      light.position.set(0, -99999, 0);
+      light.visible = true;
       this.scene.add(light);
       this.flashLights.push({
         light,
@@ -669,12 +728,23 @@ export class AsteroidField {
   }
 
   spawnImpactLight(pos, colorHex = '#ff2244', intensity = 14.0, distance = 40.0, duration = 0.10) {
-    if (!this.flashLights) return;
+    if (!this.flashLights || this.flashLights.length === 0) return;
     let entry = null;
     for (const fl of this.flashLights) {
       if (!fl.active) {
         entry = fl;
         break;
+      }
+    }
+    // If all slots are active, reuse the light closest to expiration
+    if (!entry) {
+      let maxProgress = -1;
+      for (const fl of this.flashLights) {
+        const progress = fl.life / fl.maxLife;
+        if (progress > maxProgress) {
+          maxProgress = progress;
+          entry = fl;
+        }
       }
     }
     if (!entry) entry = this.flashLights[0];
@@ -687,7 +757,7 @@ export class AsteroidField {
     entry.light.distance = distance;
     entry.light.intensity = intensity;
     entry.light.position.copy(pos);
-    entry.light.visible = true;
+    // Never alter entry.light.visible - keeping it true ensures zero shader recompilations!
   }
 
   updateFlashLights(dt) {
@@ -697,8 +767,9 @@ export class AsteroidField {
       fl.life += dt;
       if (fl.life >= fl.maxLife) {
         fl.active = false;
-        fl.light.visible = false;
-        fl.light.intensity = 0;
+        fl.light.intensity = 0.0;
+        fl.light.position.set(0, -99999, 0);
+        // Do NOT set visible = false to prevent WebGL lighting hash mutation!
         continue;
       }
       const progress = fl.life / fl.maxLife;
@@ -777,6 +848,7 @@ export class AsteroidField {
       emissiveIntensity: 0.45,
       flatShading: true
     });
+    this.wreckageMaterial = wreckageMat;
 
     for (let i = 0; i < size; i++) {
       const geom = wreckageGeoms[i % wreckageGeoms.length];
@@ -894,11 +966,21 @@ export class AsteroidField {
    */
   spawnLaserHitEffect(hitPoint, surfaceNormal = null, laserColorHex = '#ff2244', laserDir = null) {
     if (!hitPoint) return;
-    const col = laserColorHex instanceof THREE.Color ? laserColorHex : new THREE.Color(laserColorHex);
-    const norm = surfaceNormal ? surfaceNormal.clone().normalize() : new THREE.Vector3(0, 1, 0);
+    if (laserColorHex instanceof THREE.Color) {
+      _colorScratch.copy(laserColorHex);
+    } else {
+      _colorScratch.set(laserColorHex);
+    }
+
+    if (surfaceNormal) {
+      _vSprayNorm.copy(surfaceNormal).normalize();
+    } else {
+      _vSprayNorm.set(0, 1, 0);
+    }
 
     // 1. Dynamic Point Light flash (illuminates 3D rock crags & ship hull)
-    this.spawnImpactLight(hitPoint.clone().addScaledVector(norm, 0.4), col.getHex(), 14.0, 38.0, 0.09);
+    _vFlashPos.copy(hitPoint).addScaledVector(_vSprayNorm, 0.4);
+    this.spawnImpactLight(_vFlashPos, _colorScratch.getHex(), 14.0, 38.0, 0.09);
 
     // 2. Optical Plasma Core Flash (4 bright bloom sparks right at impact point)
     for (let f = 0; f < 4; f++) {
@@ -909,24 +991,24 @@ export class AsteroidField {
       this.sparkPositions[i3 + 1] = hitPoint.y + (Math.random() - 0.5) * 0.15;
       this.sparkPositions[i3 + 2] = hitPoint.z + (Math.random() - 0.5) * 0.15;
 
-      this.sparkVelocities[i3 + 0] = norm.x * 2.0 + (Math.random() - 0.5) * 1.5;
-      this.sparkVelocities[i3 + 1] = norm.y * 2.0 + (Math.random() - 0.5) * 1.5;
-      this.sparkVelocities[i3 + 2] = norm.z * 2.0 + (Math.random() - 0.5) * 1.5;
+      this.sparkVelocities[i3 + 0] = _vSprayNorm.x * 2.0 + (Math.random() - 0.5) * 1.5;
+      this.sparkVelocities[i3 + 1] = _vSprayNorm.y * 2.0 + (Math.random() - 0.5) * 1.5;
+      this.sparkVelocities[i3 + 2] = _vSprayNorm.z * 2.0 + (Math.random() - 0.5) * 1.5;
 
       this.sparkLifetimes[idx] = 0.0;
       this.sparkMaxLifetimes[idx] = 0.06 + Math.random() * 0.04;
       this.sparkSizes[idx] = 14.0 + Math.random() * 10.0;
       this.sparkAlphas[idx] = 1.0;
 
-      const cMix = col.clone().lerp(new THREE.Color(1, 1, 1), 0.88);
-      this.sparkColors[i3 + 0] = cMix.r;
-      this.sparkColors[i3 + 1] = cMix.g;
-      this.sparkColors[i3 + 2] = cMix.b;
+      _colorMixScratch.copy(_colorScratch).lerp(_whiteColor, 0.88);
+      this.sparkColors[i3 + 0] = _colorMixScratch.r;
+      this.sparkColors[i3 + 1] = _colorMixScratch.g;
+      this.sparkColors[i3 + 2] = _colorMixScratch.b;
 
       this.sparkCursor = (this.sparkCursor + 1) % this.maxSparks;
     }
 
-    // 3. High-speed laser plasma sparks (28 sparks in conical plume)
+    // 3. High-speed laser plasma sparks (28 sparks in conical plume, zero GC allocations)
     const plasmaCount = 28;
     for (let c = 0; c < plasmaCount; c++) {
       const idx = this.sparkCursor;
@@ -936,43 +1018,36 @@ export class AsteroidField {
       this.sparkPositions[i3 + 1] = hitPoint.y;
       this.sparkPositions[i3 + 2] = hitPoint.z;
 
-      // Conical spray biased along surface normal
-      const randDir = new THREE.Vector3(
-        (Math.random() - 0.5) * 1.8,
-        (Math.random() - 0.5) * 1.8,
-        (Math.random() - 0.5) * 1.8
-      ).normalize();
+      const rx = (Math.random() - 0.5) * 1.8;
+      const ry = (Math.random() - 0.5) * 1.8;
+      const rz = (Math.random() - 0.5) * 1.8;
+      const rLen = Math.hypot(rx, ry, rz) || 1;
 
-      const sprayDir = new THREE.Vector3().addVectors(norm.clone().multiplyScalar(1.4), randDir).normalize();
+      const sx = _vSprayNorm.x * 1.4 + rx / rLen;
+      const sy = _vSprayNorm.y * 1.4 + ry / rLen;
+      const sz = _vSprayNorm.z * 1.4 + rz / rLen;
+      const sLen = Math.hypot(sx, sy, sz) || 1;
       const speed = 22.0 + Math.random() * 42.0;
 
-      this.sparkVelocities[i3 + 0] = sprayDir.x * speed;
-      this.sparkVelocities[i3 + 1] = sprayDir.y * speed;
-      this.sparkVelocities[i3 + 2] = sprayDir.z * speed;
+      this.sparkVelocities[i3 + 0] = (sx / sLen) * speed;
+      this.sparkVelocities[i3 + 1] = (sy / sLen) * speed;
+      this.sparkVelocities[i3 + 2] = (sz / sLen) * speed;
 
       this.sparkLifetimes[idx] = 0.0;
       this.sparkMaxLifetimes[idx] = 0.16 + Math.random() * 0.22;
       this.sparkSizes[idx] = 2.2 + Math.random() * 2.4;
       this.sparkAlphas[idx] = 1.0;
 
-      // Color variation: laser color with hot white / yellow highlights
       const whiteMix = Math.random() < 0.4 ? 0.9 : Math.random() * 0.45;
-      const cMix = col.clone().lerp(new THREE.Color(1, 1, 1), whiteMix);
-      this.sparkColors[i3 + 0] = cMix.r;
-      this.sparkColors[i3 + 1] = cMix.g;
-      this.sparkColors[i3 + 2] = cMix.b;
+      _colorMixScratch.copy(_colorScratch).lerp(_whiteColor, whiteMix);
+      this.sparkColors[i3 + 0] = _colorMixScratch.r;
+      this.sparkColors[i3 + 1] = _colorMixScratch.g;
+      this.sparkColors[i3 + 2] = _colorMixScratch.b;
 
       this.sparkCursor = (this.sparkCursor + 1) % this.maxSparks;
     }
 
     // 4. Pulverized rock debris & glowing ember fragments (16 particles)
-    const rockEmberColors = [
-      new THREE.Color('#ffaa33'),
-      new THREE.Color('#ff6611'),
-      new THREE.Color('#d4a373'),
-      new THREE.Color('#e0e0e0'),
-      new THREE.Color('#8d99ae')
-    ];
     const rockCount = 16;
     for (let c = 0; c < rockCount; c++) {
       const idx = this.sparkCursor;
@@ -982,24 +1057,27 @@ export class AsteroidField {
       this.sparkPositions[i3 + 1] = hitPoint.y + (Math.random() - 0.5) * 0.25;
       this.sparkPositions[i3 + 2] = hitPoint.z + (Math.random() - 0.5) * 0.25;
 
-      const randDir = new THREE.Vector3(
-        (Math.random() - 0.5) * 2.0,
-        (Math.random() - 0.5) * 2.0,
-        (Math.random() - 0.5) * 2.0
-      ).normalize();
-      const sprayDir = new THREE.Vector3().addVectors(norm.clone().multiplyScalar(0.9), randDir).normalize();
+      const rx = (Math.random() - 0.5) * 2.0;
+      const ry = (Math.random() - 0.5) * 2.0;
+      const rz = (Math.random() - 0.5) * 2.0;
+      const rLen = Math.hypot(rx, ry, rz) || 1;
+
+      const sx = _vSprayNorm.x * 0.9 + rx / rLen;
+      const sy = _vSprayNorm.y * 0.9 + ry / rLen;
+      const sz = _vSprayNorm.z * 0.9 + rz / rLen;
+      const sLen = Math.hypot(sx, sy, sz) || 1;
       const speed = 7.0 + Math.random() * 20.0;
 
-      this.sparkVelocities[i3 + 0] = sprayDir.x * speed;
-      this.sparkVelocities[i3 + 1] = sprayDir.y * speed;
-      this.sparkVelocities[i3 + 2] = sprayDir.z * speed;
+      this.sparkVelocities[i3 + 0] = (sx / sLen) * speed;
+      this.sparkVelocities[i3 + 1] = (sy / sLen) * speed;
+      this.sparkVelocities[i3 + 2] = (sz / sLen) * speed;
 
       this.sparkLifetimes[idx] = 0.0;
       this.sparkMaxLifetimes[idx] = 0.30 + Math.random() * 0.35;
       this.sparkSizes[idx] = 3.2 + Math.random() * 3.5;
       this.sparkAlphas[idx] = 0.95;
 
-      const rockCol = rockEmberColors[Math.floor(Math.random() * rockEmberColors.length)];
+      const rockCol = ROCK_EMBER_COLORS[Math.floor(Math.random() * ROCK_EMBER_COLORS.length)];
       this.sparkColors[i3 + 0] = rockCol.r;
       this.sparkColors[i3 + 1] = rockCol.g;
       this.sparkColors[i3 + 2] = rockCol.b;
@@ -1024,16 +1102,23 @@ export class AsteroidField {
    */
   spawnAsteroidCollisionEffect(hitPoint, pushNormal, speed = 20.0, isHeavyImpact = true) {
     if (!hitPoint) return;
-    const norm = pushNormal ? pushNormal.clone().normalize() : new THREE.Vector3(0, 1, 0);
+    if (pushNormal) {
+      _vSprayNorm.copy(pushNormal).normalize();
+    } else {
+      _vSprayNorm.set(0, 1, 0);
+    }
 
     // Tangent plane basis vectors for spreading friction sparks along the contact seam
-    const up = Math.abs(norm.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
-    const tangentX = new THREE.Vector3().crossVectors(norm, up).normalize();
-    const tangentY = new THREE.Vector3().crossVectors(norm, tangentX).normalize();
+    const upY = Math.abs(_vSprayNorm.y) < 0.9 ? 1 : 0;
+    const upX = Math.abs(_vSprayNorm.y) < 0.9 ? 0 : 1;
+    _vUp.set(upX, upY, 0);
+    _vTangentX.crossVectors(_vSprayNorm, _vUp).normalize();
+    _vTangentY.crossVectors(_vSprayNorm, _vTangentX).normalize();
 
     if (isHeavyImpact) {
       // 1. Dynamic Point Light flash (warm amber/white)
-      this.spawnImpactLight(hitPoint.clone().addScaledVector(norm, 0.6), 0xff9933, 16.0, 45.0, 0.12);
+      _vFlashPos.copy(hitPoint).addScaledVector(_vSprayNorm, 0.6);
+      this.spawnImpactLight(_vFlashPos, 0xff9933, 16.0, 45.0, 0.12);
 
       // 2. Optical Impact Flash Core (5 bright bloom sparks at contact point)
       for (let f = 0; f < 5; f++) {
@@ -1044,9 +1129,9 @@ export class AsteroidField {
         this.sparkPositions[i3 + 1] = hitPoint.y + (Math.random() - 0.5) * 0.3;
         this.sparkPositions[i3 + 2] = hitPoint.z + (Math.random() - 0.5) * 0.3;
 
-        this.sparkVelocities[i3 + 0] = norm.x * 3.0 + (Math.random() - 0.5) * 2.0;
-        this.sparkVelocities[i3 + 1] = norm.y * 3.0 + (Math.random() - 0.5) * 2.0;
-        this.sparkVelocities[i3 + 2] = norm.z * 3.0 + (Math.random() - 0.5) * 2.0;
+        this.sparkVelocities[i3 + 0] = _vSprayNorm.x * 3.0 + (Math.random() - 0.5) * 2.0;
+        this.sparkVelocities[i3 + 1] = _vSprayNorm.y * 3.0 + (Math.random() - 0.5) * 2.0;
+        this.sparkVelocities[i3 + 2] = _vSprayNorm.z * 3.0 + (Math.random() - 0.5) * 2.0;
 
         this.sparkLifetimes[idx] = 0.0;
         this.sparkMaxLifetimes[idx] = 0.08 + Math.random() * 0.04;
@@ -1062,14 +1147,6 @@ export class AsteroidField {
 
       // 3. Heavy shower of friction metal sparks (45 to 65 sparks)
       const sparkCount = Math.min(65, Math.max(30, Math.round(speed * 1.0)));
-      const metalColors = [
-        new THREE.Color('#ffffff'), // White-hot
-        new THREE.Color('#fff275'), // Bright incandescent yellow
-        new THREE.Color('#ffaa00'), // Amber gold
-        new THREE.Color('#ff5500'), // Fiery orange
-        new THREE.Color('#38bdf8')  // Blue electric shield spark
-      ];
-
       for (let c = 0; c < sparkCount; c++) {
         const idx = this.sparkCursor;
         const i3 = idx * 3;
@@ -1083,9 +1160,11 @@ export class AsteroidField {
         const radialSpeed = 16.0 + Math.random() * (22.0 + speed * 0.65);
         const outwardSpeed = 8.0 + Math.random() * (16.0 + speed * 0.4);
 
-        const vx = tangentX.x * Math.cos(angle) * radialSpeed + tangentY.x * Math.sin(angle) * radialSpeed + norm.x * outwardSpeed;
-        const vy = tangentX.y * Math.cos(angle) * radialSpeed + tangentY.y * Math.sin(angle) * radialSpeed + norm.y * outwardSpeed;
-        const vz = tangentX.z * Math.cos(angle) * radialSpeed + tangentY.z * Math.sin(angle) * radialSpeed + norm.z * outwardSpeed;
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+        const vx = _vTangentX.x * cosA * radialSpeed + _vTangentY.x * sinA * radialSpeed + _vSprayNorm.x * outwardSpeed;
+        const vy = _vTangentX.y * cosA * radialSpeed + _vTangentY.y * sinA * radialSpeed + _vSprayNorm.y * outwardSpeed;
+        const vz = _vTangentX.z * cosA * radialSpeed + _vTangentY.z * sinA * radialSpeed + _vSprayNorm.z * outwardSpeed;
 
         this.sparkVelocities[i3 + 0] = vx;
         this.sparkVelocities[i3 + 1] = vy;
@@ -1096,7 +1175,7 @@ export class AsteroidField {
         this.sparkSizes[idx] = 2.4 + Math.random() * 3.0;
         this.sparkAlphas[idx] = 1.0;
 
-        const col = metalColors[Math.floor(Math.random() * metalColors.length)];
+        const col = COLLISION_METAL_COLORS[Math.floor(Math.random() * COLLISION_METAL_COLORS.length)];
         this.sparkColors[i3 + 0] = col.r;
         this.sparkColors[i3 + 1] = col.g;
         this.sparkColors[i3 + 2] = col.b;
@@ -1105,15 +1184,7 @@ export class AsteroidField {
       }
 
       // 4. Crushed asteroid rock dust & pulverized chunks (20 to 30 particles)
-      const rockColors = [
-        new THREE.Color('#ff8833'),
-        new THREE.Color('#d4a373'),
-        new THREE.Color('#a89f91'),
-        new THREE.Color('#6c757d'),
-        new THREE.Color('#343a40')
-      ];
       const rockCount = Math.min(30, Math.max(14, Math.round(speed * 0.55)));
-
       for (let c = 0; c < rockCount; c++) {
         const idx = this.sparkCursor;
         const i3 = idx * 3;
@@ -1122,23 +1193,22 @@ export class AsteroidField {
         this.sparkPositions[i3 + 1] = hitPoint.y + (Math.random() - 0.5) * 0.6;
         this.sparkPositions[i3 + 2] = hitPoint.z + (Math.random() - 0.5) * 0.6;
 
-        const dir = new THREE.Vector3(
-          norm.x + (Math.random() - 0.5) * 1.4,
-          norm.y + (Math.random() - 0.5) * 1.4,
-          norm.z + (Math.random() - 0.5) * 1.4
-        ).normalize();
+        const rx = _vSprayNorm.x + (Math.random() - 0.5) * 1.4;
+        const ry = _vSprayNorm.y + (Math.random() - 0.5) * 1.4;
+        const rz = _vSprayNorm.z + (Math.random() - 0.5) * 1.4;
+        const rLen = Math.hypot(rx, ry, rz) || 1;
         const rSpeed = 6.0 + Math.random() * 20.0;
 
-        this.sparkVelocities[i3 + 0] = dir.x * rSpeed;
-        this.sparkVelocities[i3 + 1] = dir.y * rSpeed;
-        this.sparkVelocities[i3 + 2] = dir.z * rSpeed;
+        this.sparkVelocities[i3 + 0] = (rx / rLen) * rSpeed;
+        this.sparkVelocities[i3 + 1] = (ry / rLen) * rSpeed;
+        this.sparkVelocities[i3 + 2] = (rz / rLen) * rSpeed;
 
         this.sparkLifetimes[idx] = 0.0;
         this.sparkMaxLifetimes[idx] = 0.35 + Math.random() * 0.45;
         this.sparkSizes[idx] = 4.0 + Math.random() * 4.5;
         this.sparkAlphas[idx] = 0.9;
 
-        const col = rockColors[Math.floor(Math.random() * rockColors.length)];
+        const col = COLLISION_ROCK_COLORS[Math.floor(Math.random() * COLLISION_ROCK_COLORS.length)];
         this.sparkColors[i3 + 0] = col.r;
         this.sparkColors[i3 + 1] = col.g;
         this.sparkColors[i3 + 2] = col.b;
@@ -1158,9 +1228,10 @@ export class AsteroidField {
 
         const angle = Math.random() * Math.PI * 2;
         const rSpeed = 10.0 + Math.random() * 18.0;
-        this.sparkVelocities[i3 + 0] = tangentX.x * Math.cos(angle) * rSpeed + norm.x * 6.0;
-        this.sparkVelocities[i3 + 1] = tangentX.y * Math.cos(angle) * rSpeed + norm.y * 6.0;
-        this.sparkVelocities[i3 + 2] = tangentX.z * Math.cos(angle) * rSpeed + norm.z * 6.0;
+        const cosA = Math.cos(angle);
+        this.sparkVelocities[i3 + 0] = _vTangentX.x * cosA * rSpeed + _vSprayNorm.x * 6.0;
+        this.sparkVelocities[i3 + 1] = _vTangentX.y * cosA * rSpeed + _vSprayNorm.y * 6.0;
+        this.sparkVelocities[i3 + 2] = _vTangentX.z * cosA * rSpeed + _vSprayNorm.z * 6.0;
 
         this.sparkLifetimes[idx] = 0.0;
         this.sparkMaxLifetimes[idx] = 0.14 + Math.random() * 0.18;
@@ -1244,21 +1315,7 @@ export class AsteroidField {
     // 3. High-Velocity Radial Kinetic Needle Sparks (90 to 150 fast sparks)
     // Searing molten metal & plasma needles blasting out at 35 to 85 m/s
     const needleCount = Math.min(150, Math.max(75, Math.round(r * 18.0)));
-    const shipNeedleColors = [
-      new THREE.Color('#00ffff'), // Cyan shield capacitor
-      new THREE.Color('#38bdf8'), // Electric sky blue
-      new THREE.Color('#ffffff'), // White-hot hull armor
-      new THREE.Color('#ffaa00'), // Superheated copper
-      new THREE.Color('#ff5500')  // Fiery propellant
-    ];
-    const asteroidNeedleColors = [
-      new THREE.Color('#ffffff'), // White-hot rock spark
-      new THREE.Color('#fff4b8'), // Incandescent golden yellow
-      new THREE.Color('#ffaa00'), // Amber mineral ember
-      new THREE.Color('#ff6600'), // Fiery basalt streak
-      new THREE.Color('#ff3300')  // Deep incandescent red
-    ];
-    const needlePalette = isShip ? shipNeedleColors : asteroidNeedleColors;
+    const needlePalette = isShip ? SHIP_NEEDLE_COLORS : ASTEROID_NEEDLE_COLORS;
 
     for (let c = 0; c < needleCount; c++) {
       const idx = this.sparkCursor;

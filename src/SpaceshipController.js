@@ -1127,6 +1127,15 @@ export class SpaceshipController {
     });
 
     this.laserMaterialCache = new Map();
+    const commonColors = [
+      '#ff2244', '#ff4422', '#38bdf8', '#00e5ff', '#00f5ff',
+      '#ff2255', '#f97316', '#ffaa00', '#10b981', '#00ff88',
+      '#c084fc', '#d946ef', '#facc15', '#ffd700', '#67e8f9',
+      '#f43f5e', '#00f0ff', '#ff3b30'
+    ];
+    for (const c of commonColors) {
+      this.getLaserMaterial(c);
+    }
     const defaultMat = this.getLaserMaterial('#ff2244');
 
     for (let i = 0; i < size; i++) {
@@ -1258,13 +1267,12 @@ export class SpaceshipController {
       this.visualHolder.visible = false;
 
       if (this.asteroidField) {
-        const shipWorldPos = new THREE.Vector3();
-        this.root.getWorldPosition(shipWorldPos);
-        this.asteroidField.spawnExplosionSparks(shipWorldPos, 6.5, true);
+        this.root.getWorldPosition(_cockpitPos);
+        this.asteroidField.spawnExplosionSparks(_cockpitPos, 6.5, true);
         if (this.asteroidField.spawnShipWreckage) {
-          this.asteroidField.spawnShipWreckage(shipWorldPos, 3.8, 12);
+          this.asteroidField.spawnShipWreckage(_cockpitPos, 3.8, 12);
         }
-        this.asteroidField.spawnShockwave(shipWorldPos, 8.0);
+        this.asteroidField.spawnShockwave(_cockpitPos, 8.0);
       }
 
       if (this.onDestroyed) {

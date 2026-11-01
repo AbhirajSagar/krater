@@ -994,6 +994,88 @@ function bindNetworkEvents() {
   }
 }
 
+/**
+ * Comprehensive pre-warming routine for visual shaders, particle systems, weapon bolts,
+ * debris wreckage, and impact lights to eliminate runtime GPU driver stalling and stutters.
+ */
+async function warmupVFXShaders(renderer, scene, camera, spaceship, asteroidField, enemyManager, remotePlayersManager) {
+  const warmupGroup = new THREE.Group();
+  warmupGroup.name = 'VFX_Warmup_Group';
+
+  // Position a small cluster right in front of the camera so everything is within the frustum
+  const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+  warmupGroup.position.copy(camera.position).addScaledVector(forwardDir, 2.0);
+
+  const dummyGeom = new THREE.PlaneGeometry(0.01, 0.01);
+  const materialsToWarm = new Set();
+
+  // 1. Asteroid Field Materials & Debris
+  if (asteroidField) {
+    if (asteroidField.rockMaterials) {
+      for (const m of asteroidField.rockMaterials) if (m) materialsToWarm.add(m);
+    }
+    if (asteroidField.wreckageMaterial) {
+      materialsToWarm.add(asteroidField.wreckageMaterial);
+    }
+    if (asteroidField.shockwaveMaterial) {
+      materialsToWarm.add(asteroidField.shockwaveMaterial);
+    }
+  }
+
+  // 2. Spaceship Laser Materials & Thrusters
+  if (spaceship) {
+    if (spaceship.laserCoreMat) materialsToWarm.add(spaceship.laserCoreMat);
+    if (spaceship.laserMaterialCache) {
+      for (const m of spaceship.laserMaterialCache.values()) if (m) materialsToWarm.add(m);
+    }
+    if (spaceship.sparkSystem && spaceship.sparkSystem.material) {
+      materialsToWarm.add(spaceship.sparkSystem.material);
+    }
+    if (spaceship.activeThrusters) {
+      for (const t of spaceship.activeThrusters) {
+        if (t.plumeMaterial) materialsToWarm.add(t.plumeMaterial);
+        if (t.coreMaterial) materialsToWarm.add(t.coreMaterial);
+        if (t.throatMaterial) materialsToWarm.add(t.throatMaterial);
+      }
+    }
+  }
+
+  // 3. Enemy & Remote Laser Materials
+  if (enemyManager?.laserMatCache) {
+    for (const m of enemyManager.laserMatCache.values()) if (m) materialsToWarm.add(m);
+  }
+  if (remotePlayersManager?.laserMatCache) {
+    for (const m of remotePlayersManager.laserMatCache.values()) if (m) materialsToWarm.add(m);
+  }
+
+  // Attach tiny dummy meshes with these materials to warmupGroup
+  for (const mat of materialsToWarm) {
+    const mesh = new THREE.Mesh(dummyGeom, mat);
+    mesh.frustumCulled = false;
+    warmupGroup.add(mesh);
+  }
+
+  scene.add(warmupGroup);
+
+  // 4. Pre-compile using Three.js compileAsync (if supported) or synchronous compile
+  if (typeof renderer.compileAsync === 'function') {
+    try {
+      await renderer.compileAsync(scene, camera);
+    } catch {
+      renderer.compile(scene, camera);
+    }
+  } else {
+    renderer.compile(scene, camera);
+  }
+
+  // 5. Force a hardware GPU render pass (behind the loading screen) to bake driver pipelines
+  renderer.render(scene, camera);
+
+  // 6. Clean up temporary warmup helper meshes
+  scene.remove(warmupGroup);
+  dummyGeom.dispose();
+}
+
 // 8. Pipeline Initialization
 async function initPipeline() {
   crosshairContainer = document.getElementById('crosshair-container');
@@ -1190,12 +1272,11 @@ async function initPipeline() {
   // Initialize main menu state right away (active behind loading screen)
   enterMainMenu();
 
-  // Shader Warmup
+  // Comprehensive Shader & VFX Warmup
   loadingScreen.setProgress(90);
   loadingScreen.setStatus('COMPILING VISUAL SHADERS...');
   await new Promise(r => setTimeout(r, 40));
-  renderer.compile(scene, camera);
-  renderer.render(scene, camera);
+  await warmupVFXShaders(renderer, scene, camera, spaceship, asteroidField, enemyManager, remotePlayersManager);
 
   // Connect to Backend (Keep loading until connection is completed)
   loadingScreen.setProgress(94);

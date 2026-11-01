@@ -163,6 +163,13 @@ export class RemotePlayerManager {
     });
 
     this.laserMatCache = new Map();
+    const commonColors = [
+      '#ff3b30', '#ff2244', '#38bdf8', '#00e5ff', '#ffaa00',
+      '#00ff88', '#c084fc', '#ffd700', '#f43f5e', '#67e8f9'
+    ];
+    for (const c of commonColors) {
+      this.getLaserMaterial(c);
+    }
 
     for (let i = 0; i < size; i++) {
       const group = new THREE.Group();

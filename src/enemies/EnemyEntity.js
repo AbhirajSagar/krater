@@ -221,7 +221,7 @@ export class EnemyEntity {
     for (const tConfig of configs) {
       const radius = typeof tConfig.size === 'number' ? 0.2 * tConfig.size : (tConfig.size?.radius || 0.22);
       const length = typeof tConfig.size === 'number' ? 1.2 * tConfig.size : (tConfig.size?.length || 1.35);
-      const thruster = new ThrusterFlame(tConfig, radius, length);
+      const thruster = new ThrusterFlame({ ...tConfig, enablePointLight: false }, radius, length);
       this.thrusterGroup.add(thruster.root);
       this.activeThrusters.push(thruster);
     }

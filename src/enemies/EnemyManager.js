@@ -276,6 +276,10 @@ export class EnemyManager {
     this.laserPool = [];
     this.activeLasers = [];
     this.laserMatCache = new Map();
+    const commonColors = ['#ff3b30', '#ff2244', '#38bdf8', '#00e5ff', '#ffaa00'];
+    for (const c of commonColors) {
+      this.getLaserMaterial(c);
+    }
 
     const geom = new THREE.CylinderGeometry(0.045, 0.08, 2.4, 8);
     geom.rotateX(Math.PI / 2);

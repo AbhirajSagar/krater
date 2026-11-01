@@ -393,13 +393,17 @@ export class ThrusterFlame {
     this.root.add(this.throatMesh);
 
     // 4. Dynamic PointLight Engine Flare
-    this.pointLight = new THREE.PointLight(
-      this.flameColor,
-      config.lightIntensity || 2.2,
-      8.0
-    );
-    this.pointLight.position.set(0, 0, 0.25);
-    this.root.add(this.pointLight);
+    if (config.enablePointLight !== false && config.enableLight !== false) {
+      this.pointLight = new THREE.PointLight(
+        this.flameColor,
+        config.lightIntensity || 2.2,
+        8.0
+      );
+      this.pointLight.position.set(0, 0, 0.25);
+      this.root.add(this.pointLight);
+    } else {
+      this.pointLight = null;
+    }
   }
 
   /**
@@ -452,16 +456,18 @@ export class ThrusterFlame {
     this.throatMesh.scale.set(radScale, radScale, 1.0);
 
     // Dynamic Engine Light
-    const baseLight = this.config.lightIntensity || 2.2;
-    const boostLightMultiplier = 1.0 + this.currentBoost * 2.5;
-    this.pointLight.intensity = baseLight * throttleScale * boostLightMultiplier * flicker;
+    if (this.pointLight) {
+      const baseLight = this.config.lightIntensity || 2.2;
+      const boostLightMultiplier = 1.0 + this.currentBoost * 2.5;
+      this.pointLight.intensity = baseLight * throttleScale * boostLightMultiplier * flicker;
 
-    // Color shift on boost for the light (zero allocation)
-    if (this.currentBoost > 0.05) {
-      _tempLightColor.copy(this.flameColor).lerp(_boostShiftColor, this.currentBoost * 0.4);
-      this.pointLight.color.copy(_tempLightColor);
-    } else {
-      this.pointLight.color.copy(this.flameColor);
+      // Color shift on boost for the light (zero allocation)
+      if (this.currentBoost > 0.05) {
+        _tempLightColor.copy(this.flameColor).lerp(_boostShiftColor, this.currentBoost * 0.4);
+        this.pointLight.color.copy(_tempLightColor);
+      } else {
+        this.pointLight.color.copy(this.flameColor);
+      }
     }
   }
 
@@ -474,7 +480,9 @@ export class ThrusterFlame {
     this.plumeUniforms.uColor.value.copy(this.flameColor);
     this.coreUniforms.uColor.value.copy(this.flameColor);
     this.throatUniforms.uColor.value.copy(this.flameColor);
-    this.pointLight.color.copy(this.flameColor);
+    if (this.pointLight) {
+      this.pointLight.color.copy(this.flameColor);
+    }
   }
 
   /**
@@ -487,6 +495,11 @@ export class ThrusterFlame {
     this.coreMaterial.dispose();
     this.throatMesh.geometry.dispose();
     this.throatMaterial.dispose();
+    if (this.pointLight) {
+      this.root.remove(this.pointLight);
+      this.pointLight.dispose();
+      this.pointLight = null;
+    }
   }
 }
 
@@ -556,6 +569,7 @@ export class ThrusterSparkSystem {
     });
 
     this.points = new THREE.Points(geom, this.material);
+    this.points.frustumCulled = false;
     this.scene.add(this.points);
   }
 
