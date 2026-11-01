@@ -15,6 +15,7 @@ const _shipWorldQuat = new THREE.Quaternion();
 const _right = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 const _origin = new THREE.Vector3();
+const _aimPoint = new THREE.Vector3();
 
 export class AIEnemy extends EnemyEntity {
   /**
@@ -32,13 +33,19 @@ export class AIEnemy extends EnemyEntity {
     const wConfig = options.weapon || {};
     this.weapon = {
       enabled: wConfig.enabled ?? false,
-      fireInterval: wConfig.fireInterval ?? 1.5,
+      fireInterval: wConfig.fireInterval ?? 1.4,
+      burstCount: wConfig.burstCount ?? 1,
+      burstInterval: wConfig.burstInterval ?? 0.12,
       projectileSpeed: wConfig.projectileSpeed ?? 160.0,
       damage: wConfig.damage ?? 15,
-      range: wConfig.range ?? 150.0,
+      range: wConfig.range ?? 160.0,
       accuracy: wConfig.accuracy ?? 0.88,
+      aimCone: wConfig.aimCone ?? 0.82,
       color: wConfig.color ?? '#ff3b30',
-      cooldown: (wConfig.fireInterval ?? 1.5) * (0.5 + Math.random() * 0.8)
+      cooldown: (wConfig.fireInterval ?? 1.4) * (0.5 + Math.random() * 0.8),
+      burstRemaining: 0,
+      burstTimer: 0,
+      hardpointIndex: 0
     };
 
     // Callback fired when this AI enemy shoots a laser
@@ -68,11 +75,16 @@ export class AIEnemy extends EnemyEntity {
 
   /**
    * Evaluates if enemy has clear line-of-sight and firing angle toward target
+   * using predictive lead calculation for moving targets.
    * @param {THREE.Vector3} targetPos
+   * @param {THREE.Vector3} [targetVel]
    * @returns {boolean}
    */
-  canFireAt(targetPos) {
-    if (!this.weapon.enabled || this.weapon.cooldown > 0 || this.isDestroyed || !this.root.visible) {
+  canFireAt(targetPos, targetVel = null) {
+    if (!this.weapon.enabled || this.isDestroyed || !this.root.visible) {
+      return false;
+    }
+    if (this.weapon.cooldown > 0 && this.weapon.burstRemaining <= 0) {
       return false;
     }
 
@@ -82,42 +94,55 @@ export class AIEnemy extends EnemyEntity {
       return false;
     }
 
-    _vToTarget.normalize();
+    // Predictive lead calculation (lasers travel at projectileSpeed)
+    const tLead = dist / this.weapon.projectileSpeed;
+    _aimPoint.copy(targetPos);
+    if (targetVel) {
+      _aimPoint.addScaledVector(targetVel, tLead);
+    }
+
+    _vToTarget.subVectors(_aimPoint, this.root.position).normalize();
     this.visualHolder.getWorldQuaternion(_shipWorldQuat);
     _shipFwd.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
 
-    // Check if target is within a ~30-degree cone (cos(30 deg) ~= 0.866)
+    // Check if target lead point is within firing cone
     const dot = _shipFwd.dot(_vToTarget);
-    return dot >= 0.85;
+    return dot >= this.weapon.aimCone;
   }
 
   /**
-   * Fires laser projectile towards target position with accuracy jitter
+   * Fires laser projectile towards target position with lead prediction and accuracy jitter
    * @param {THREE.Vector3} targetPos
+   * @param {THREE.Vector3} [targetVel]
    */
-  fireAt(targetPos) {
-    if (!this.canFireAt(targetPos)) return;
+  fireAt(targetPos, targetVel = null) {
+    // Predictive lead calculation
+    const dist = this.root.position.distanceTo(targetPos);
+    const tLead = dist / this.weapon.projectileSpeed;
+    _aimPoint.copy(targetPos);
+    if (targetVel) {
+      _aimPoint.addScaledVector(targetVel, tLead);
+    }
 
-    // Reset cooldown with a little jitter
-    this.weapon.cooldown = this.weapon.fireInterval * (0.85 + Math.random() * 0.3);
-
-    _vToTarget.subVectors(targetPos, this.root.position).normalize();
+    _vToTarget.subVectors(_aimPoint, this.root.position).normalize();
 
     // Inaccuracy spread
-    const spread = (1.0 - this.weapon.accuracy) * 0.15;
+    const spread = (1.0 - this.weapon.accuracy) * 0.12;
     _shotDir.set(
       _vToTarget.x + (Math.random() - 0.5) * spread,
       _vToTarget.y + (Math.random() - 0.5) * spread,
       _vToTarget.z + (Math.random() - 0.5) * spread
     ).normalize();
 
-    // Hardpoint offsets (twin cannons on ship wings)
+    // Alternating twin cannons on ship wings
+    this.weapon.hardpointIndex = 1 - this.weapon.hardpointIndex;
+    const side = this.weapon.hardpointIndex === 1 ? 1 : -1;
+
     this.visualHolder.getWorldQuaternion(_shipWorldQuat);
     _right.set(1, 0, 0).applyQuaternion(_shipWorldQuat);
     _forward.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
 
-    const gunOffset = 1.1;
-    const side = Math.random() > 0.5 ? 1 : -1;
+    const gunOffset = 1.15;
     _origin.copy(this.root.position)
       .addScaledVector(_right, side * gunOffset)
       .addScaledVector(_forward, 1.8);
@@ -149,14 +174,38 @@ export class AIEnemy extends EnemyEntity {
       this.behavior.update(dt, this, context);
     }
 
-    // Weapon simulation
+    // Weapon simulation with burst fire and lead tracking
     if (this.weapon.enabled) {
       if (this.weapon.cooldown > 0) {
         this.weapon.cooldown -= dt;
       }
+      if (this.weapon.burstTimer > 0) {
+        this.weapon.burstTimer -= dt;
+      }
 
-      if (context.playerPosition && this.canFireAt(context.playerPosition)) {
-        this.fireAt(context.playerPosition);
+      const pPos = context.playerPosition;
+      const pVel = context.playerVelocity;
+
+      if (this.weapon.burstRemaining > 0 && this.weapon.burstTimer <= 0) {
+        if (pPos) {
+          this.fireAt(pPos, pVel);
+          this.weapon.burstRemaining--;
+          this.weapon.burstTimer = this.weapon.burstInterval;
+          if (this.weapon.burstRemaining <= 0) {
+            this.weapon.cooldown = this.weapon.fireInterval * (0.85 + Math.random() * 0.3);
+          }
+        } else {
+          this.weapon.burstRemaining = 0;
+        }
+      } else if (this.weapon.cooldown <= 0 && this.weapon.burstRemaining <= 0) {
+        if (pPos && this.canFireAt(pPos, pVel)) {
+          this.fireAt(pPos, pVel);
+          this.weapon.burstRemaining = Math.max(0, (this.weapon.burstCount || 1) - 1);
+          this.weapon.burstTimer = this.weapon.burstInterval;
+          if (this.weapon.burstRemaining <= 0) {
+            this.weapon.cooldown = this.weapon.fireInterval * (0.85 + Math.random() * 0.3);
+          }
+        }
       }
     }
 

@@ -477,7 +477,7 @@ function startBattle(room = null, isSolo = false) {
       enemySpawner.startAutoSpawn({
         maxEnemies: 3,
         interval: 5.0,
-        archetypes: ['drone', 'scout', 'fighter'],
+        archetypes: ['drone', 'scout', 'fighter', 'interceptor'],
         minDist: 65,
         maxDist: 110,
         autoRespawn: true,
@@ -955,10 +955,11 @@ function bindNetworkEvents() {
 
       // Determine killer identity
       let killerName = 'Environmental Hazard';
-      if (killerId && remotePlayersManager) {
-        const killerP = remotePlayersManager.getPlayer(killerId);
-        if (killerP) {
-          killerName = killerP.name;
+      if (killerId) {
+        if (remotePlayersManager && remotePlayersManager.getPlayer(killerId)) {
+          killerName = remotePlayersManager.getPlayer(killerId).name;
+        } else if (enemyManager && enemyManager.getEnemy(killerId)) {
+          killerName = enemyManager.getEnemy(killerId).name;
         } else {
           killerName = 'Hostile Pilot';
         }

@@ -12,7 +12,11 @@ const _v2 = new THREE.Vector3();
 const _vTarget = new THREE.Vector3();
 const _fwd = new THREE.Vector3(0, 0, -1);
 const _up = new THREE.Vector3(0, 1, 0);
+const _right = new THREE.Vector3(1, 0, 0);
 const _quat = new THREE.Quaternion();
+const _zeroVec = new THREE.Vector3(0, 0, 0);
+const _playerFwd = new THREE.Vector3();
+const _toPlayer = new THREE.Vector3();
 
 /**
  * Base Behavior interface
@@ -82,18 +86,20 @@ export class StationaryBehavior extends BaseBehavior {
 
 /**
  * Orbit Behavior:
- * Smooth circular/elliptical orbital trajectory around a point or player.
+ * Smooth circular orbital trajectory around a point or player.
+ * In combat, dynamically anchors to the player's position, providing a
+ * smooth, readable circular strafe path that is enjoyable to track, lead, and shoot.
  */
 export class OrbitBehavior extends BaseBehavior {
   constructor(options = {}) {
     super(options);
-    this.radius = options.radius ?? 75;
+    this.radius = options.radius ?? 55;
     this.height = options.height ?? 0;
-    this.speed = options.speed ?? 0.25; // rad/s
-    this.wobbleFreq = options.wobbleFreq ?? 0.45;
-    this.wobbleAmp = options.wobbleAmp ?? 14;
+    this.speed = options.speed ?? 0.36; // rad/s (~20 m/s)
+    this.wobbleFreq = options.wobbleFreq ?? 0.3;
+    this.wobbleAmp = options.wobbleAmp ?? 5; // gentle, readable wobble
     this.clockwise = options.clockwise ?? true;
-    this.anchor = options.anchor ?? new THREE.Vector3(0, 0, 0);
+    this.anchor = options.anchor ?? 'player';
     this.angle = options.initialAngle ?? (Math.random() * Math.PI * 2);
     this.time = Math.random() * 10;
   }
@@ -110,16 +116,16 @@ export class OrbitBehavior extends BaseBehavior {
     this.angle += this.speed * dirSign * dt;
 
     let center = this.anchor;
-    if (this.anchor === 'player' && context.playerPosition) {
+    if ((this.anchor === 'player' || !this.anchor) && context.playerPosition) {
       center = context.playerPosition;
     }
 
-    const cx = center.x || 0;
-    const cy = (center.y || 0) + this.height;
-    const cz = center.z || 0;
+    const cx = (center && typeof center.x === 'number') ? center.x : (Array.isArray(center) ? center[0] : 0);
+    const cy = (center && typeof center.y === 'number') ? center.y : (Array.isArray(center) ? center[1] : 0);
+    const cz = (center && typeof center.z === 'number') ? center.z : (Array.isArray(center) ? center[2] : 0);
 
     const tx = cx + Math.cos(this.angle) * this.radius;
-    const ty = cy + Math.sin(this.time * this.wobbleFreq) * this.wobbleAmp;
+    const ty = cy + this.height + Math.sin(this.time * this.wobbleFreq) * this.wobbleAmp;
     const tz = cz + Math.sin(this.angle) * this.radius;
 
     const vx = -Math.sin(this.angle) * this.radius * this.speed * dirSign;
@@ -136,7 +142,7 @@ export class OrbitBehavior extends BaseBehavior {
     }
 
     // Bank into orbit curve
-    const bankMagnitude = 0.35 * (this.clockwise ? -1 : 1);
+    const bankMagnitude = 0.42 * (this.clockwise ? -1 : 1);
     enemy.targetBank = bankMagnitude;
   }
 }
@@ -210,76 +216,236 @@ export class PatrolBehavior extends BaseBehavior {
 
 /**
  * Chase / Dogfight Behavior:
- * Intelligent intercept steering, distance maintenance, and evasive break-away maneuvers.
+ * Intelligent space combat flight AI supporting tactical tail pursuit,
+ * off-axis flanking passes, high-G banking combat turns (readable and chasable!),
+ * dynamic speed matching, and authentic S-turn evasive weaves when taking fire from behind.
  */
 export class ChaseBehavior extends BaseBehavior {
   constructor(options = {}) {
     super(options);
     this.maxSpeed = options.maxSpeed ?? 42;
-    this.turnSpeed = options.turnSpeed ?? 2.8;
+    this.attackSpeed = options.attackSpeed ?? 50;
+    this.turnSpeed = options.turnSpeed ?? 1.6;
     this.combatDistance = options.combatDistance ?? 40;
-    this.breakawayDistance = options.breakawayDistance ?? 16;
-    this.attackSpeed = options.attackSpeed ?? 48;
-    this.leadFactor = options.leadFactor ?? 0.65;
+    this.breakawayDistance = options.breakawayDistance ?? 20;
+    this.leadFactor = options.leadFactor ?? 0.7;
 
-    this.state = 'APPROACH'; // 'APPROACH' | 'COMBAT' | 'BREAKAWAY'
-    this.breakawayTimer = 0;
-    this.breakawayDir = new THREE.Vector3();
+    // Tactical Dogfight States:
+    // 'APPROACH'    - Sweeping, curved flanking approach towards the engagement zone
+    // 'PURSUIT'     - Tailing the player's 6 o'clock: matches speed, stays locked behind, fires to kill
+    // 'COMBAT_TURN' - High-G banking turn peeling off to reposition (smooth readable arc for player to chase!)
+    // 'EVASIVE'     - S-turn weave / barrel roll when taking fire from behind
+    // 'EXTEND'      - Brief forward boost burn to build separation before re-engaging
+    this.state = options.initialState || 'APPROACH';
+
+    this.stateTimer = 0;
+    this.turnDirection = Math.random() > 0.5 ? 1 : -1; // 1 = bank right, -1 = bank left
+    this.verticalBias = (Math.random() - 0.5) * 0.4;
+    this.evasiveTimer = 0;
+    this.evasiveDuration = 2.4;
+    this.lastDamageTime = 0;
+    this.damageStreak = 0;
+
+    // Lateral flanking offset so the enemy doesn't charge straight into a head-on collision
+    this.flankSign = Math.random() > 0.5 ? 1 : -1;
+    this.flankOffset = new THREE.Vector3(
+      this.flankSign * (20 + Math.random() * 12),
+      (Math.random() - 0.5) * 14,
+      0
+    );
+  }
+
+  init(enemy) {
+    this.stateTimer = Math.random() * 0.8;
   }
 
   update(dt, enemy, context) {
     const targetPos = context.playerPosition;
     if (!targetPos) return;
 
-    const targetVel = context.playerVelocity || new THREE.Vector3();
-    const toTarget = _v1.subVectors(targetPos, enemy.root.position);
-    const dist = toTarget.length();
+    const targetVel = context.playerVelocity || _zeroVec;
+    const enemyPos = enemy.root.position;
+
+    _toPlayer.subVectors(targetPos, enemyPos);
+    const dist = _toPlayer.length();
+    if (dist < 0.001) return;
+
+    const playerSpeed = targetVel.length();
+    if (playerSpeed > 1.0) {
+      _playerFwd.copy(targetVel).normalize();
+    } else if (context.camera) {
+      context.camera.getWorldDirection(_playerFwd);
+    } else {
+      _playerFwd.set(0, 0, -1);
+    }
+
+    // Current forward direction of the enemy ship in world space
+    const enemyQuat = enemy.targetQuaternion || enemy.root.quaternion;
+    const enemyFwd = _v1.set(0, 0, -1).applyQuaternion(enemyQuat);
+
+    // Tactical Geometry:
+    // 1. Is enemy behind the player? (in player's rear hemisphere / 6 o'clock)
+    const playerToEnemy = _v2.copy(enemyPos).sub(targetPos).normalize();
+    const dotPlayerBehind = _playerFwd.dot(playerToEnemy);
+
+    // 2. Is player behind the enemy? (Player is tailing the enemy)
+    const toPlayerDir = _v2.copy(_toPlayer).normalize();
+    const dotPlayerTailing = enemyFwd.dot(toPlayerDir);
+
+    this.stateTimer += dt;
+    this.evasiveTimer += dt;
 
     // State Transitions
-    if (this.state === 'BREAKAWAY') {
-      this.breakawayTimer -= dt;
-      if (this.breakawayTimer <= 0) {
-        this.state = 'APPROACH';
-      }
-    } else {
-      if (dist < this.breakawayDistance) {
-        this.state = 'BREAKAWAY';
-        this.breakawayTimer = 2.0 + Math.random() * 1.5;
-        // Break away diagonally up or to the side
-        const side = Math.random() > 0.5 ? 1 : -1;
-        this.breakawayDir.set(side * 0.8, 0.5, 0.5).normalize();
-        this.breakawayDir.applyQuaternion(enemy.root.quaternion);
-      } else if (dist <= this.combatDistance) {
-        this.state = 'COMBAT';
-      } else {
-        this.state = 'APPROACH';
-      }
+    switch (this.state) {
+      case 'EVASIVE':
+        if (this.stateTimer >= this.evasiveDuration) {
+          // Finished evasive weave, transition into a smooth combat turn to loop back
+          this.state = 'COMBAT_TURN';
+          this.stateTimer = 0;
+          this.turnDirection = Math.random() > 0.5 ? 1 : -1;
+          this.verticalBias = (Math.random() - 0.5) * 0.3;
+        }
+        break;
+
+      case 'COMBAT_TURN':
+        // Combat turn lasts 2.2 to 3.0 seconds, or ends when successfully positioned behind player
+        if (this.stateTimer > 2.6 || (this.stateTimer > 1.2 && dotPlayerBehind < -0.2 && dist > 25)) {
+          this.state = 'PURSUIT';
+          this.stateTimer = 0;
+          this.flankSign = -this.flankSign;
+        }
+        break;
+
+      case 'EXTEND':
+        if (this.stateTimer > 2.0 || dist > 85) {
+          this.state = 'COMBAT_TURN';
+          this.stateTimer = 0;
+          this.turnDirection = Math.random() > 0.5 ? 1 : -1;
+        }
+        break;
+
+      case 'PURSUIT':
+        // If enemy gets too close or passes player
+        if (dist < this.breakawayDistance) {
+          // Initiate high-G combat turn: peel off into an arc rather than ramming!
+          this.state = 'COMBAT_TURN';
+          this.stateTimer = 0;
+          this.turnDirection = Math.random() > 0.5 ? 1 : -1;
+          this.verticalBias = (Math.random() - 0.5) * 0.4;
+        } else if (dotPlayerBehind > 0.6 && dist > 60) {
+          // Player managed to turn around and face us, switch to flanking approach
+          this.state = 'APPROACH';
+          this.stateTimer = 0;
+        }
+        break;
+
+      case 'APPROACH':
+      default:
+        // If close to player, peel off into a combat turn
+        if (dist < this.breakawayDistance) {
+          this.state = 'COMBAT_TURN';
+          this.stateTimer = 0;
+          this.turnDirection = Math.random() > 0.5 ? 1 : -1;
+          this.verticalBias = (Math.random() - 0.5) * 0.4;
+        } else if (dotPlayerBehind < -0.2 && dist < 65) {
+          // Successfully positioned in rear hemisphere, engage pursuit!
+          this.state = 'PURSUIT';
+          this.stateTimer = 0;
+        }
+        break;
     }
 
     // Steering & Speed execution per state
     let desiredDir = _v2;
     let desiredSpeed = this.maxSpeed;
+    let desiredBank = null;
 
-    if (this.state === 'BREAKAWAY') {
-      desiredDir.copy(this.breakawayDir);
+    if (this.state === 'PURSUIT') {
+      // PURSUIT: Tail the player's 6 o'clock!
+      // Ideal position: combatDistance behind the player
+      const tailDist = THREE.MathUtils.clamp(this.combatDistance, 30, 48);
+      _vTarget.copy(targetPos).addScaledVector(_playerFwd, -tailDist);
+
+      // Add mild lead so it curves onto the player's flight vector
+      const tLead = (dist / 160.0) * this.leadFactor;
+      _vTarget.addScaledVector(targetVel, tLead * 0.6);
+
+      desiredDir.subVectors(_vTarget, enemyPos).normalize();
+
+      // Speed matching: dynamically match player speed to maintain tail position!
+      const distError = dist - tailDist;
+      desiredSpeed = THREE.MathUtils.clamp(
+        playerSpeed + distError * 0.55,
+        this.maxSpeed * 0.6,
+        this.attackSpeed
+      );
+
+      // Boost if player is boosting or dist is large
+      enemy.isBoosting = playerSpeed > 60 || dist > tailDist + 22;
+
+    } else if (this.state === 'COMBAT_TURN') {
+      // COMBAT_TURN: High-G tactical banking arc
+      // This is the signature chasable maneuver: the enemy banks heavily and turns
+      // in a continuous circular arc right across the player's screen!
+      _right.crossVectors(enemyFwd, _up).normalize();
+
+      // Blend forward momentum with lateral banking turn
+      desiredDir.copy(enemyFwd).multiplyScalar(0.65)
+        .addScaledVector(_right, this.turnDirection * 0.75)
+        .addScaledVector(_up, this.verticalBias)
+        .normalize();
+
+      // Moderate cruising speed through the turn so the player can chase and match
+      desiredSpeed = this.maxSpeed * 0.85;
+      enemy.isBoosting = false;
+
+      // Heavy visual bank into the turn
+      desiredBank = -this.turnDirection * 0.72; // ~41 deg banking tilt!
+
+    } else if (this.state === 'EVASIVE') {
+      // EVASIVE: S-Turn weave / barrel roll when taking fire from behind
+      // Continuous sinusoidal S-weave: challenging aim, but smooth and chasable!
+      const freq = 2.2;
+      const wave = Math.sin(this.evasiveTimer * freq);
+      const waveVert = Math.cos(this.evasiveTimer * 1.4) * 0.35;
+
+      _right.crossVectors(enemyFwd, _up).normalize();
+      desiredDir.copy(enemyFwd).multiplyScalar(0.75)
+        .addScaledVector(_right, wave * 0.6)
+        .addScaledVector(_up, waveVert)
+        .normalize();
+
+      desiredSpeed = this.attackSpeed * 0.95;
+      enemy.isBoosting = Math.abs(wave) < 0.28; // Pulse boost on weave straightaways!
+      desiredBank = -wave * 0.75; // Roll with the S-weave!
+
+    } else if (this.state === 'EXTEND') {
+      // EXTEND: High-speed separation burn
+      _right.crossVectors(enemyFwd, _up).normalize();
+      desiredDir.copy(enemyFwd).multiplyScalar(0.88)
+        .addScaledVector(_right, this.turnDirection * 0.3)
+        .normalize();
+
       desiredSpeed = this.attackSpeed;
       enemy.isBoosting = true;
-    } else if (this.state === 'COMBAT') {
-      // Predictive lead aim point
-      const tLead = (dist / 160.0) * this.leadFactor;
-      _vTarget.copy(targetPos).addScaledVector(targetVel, tLead);
-      desiredDir.subVectors(_vTarget, enemy.root.position).normalize();
-      desiredSpeed = THREE.MathUtils.lerp(this.maxSpeed * 0.6, this.maxSpeed, (dist - this.breakawayDistance) / (this.combatDistance - this.breakawayDistance));
-      enemy.isBoosting = false;
+      desiredBank = -this.turnDirection * 0.45;
+
     } else {
-      // APPROACH: Pursue lead point aggressively
+      // APPROACH: Sweeping flanking intercept curve
       const tLead = (dist / 160.0) * this.leadFactor;
       _vTarget.copy(targetPos).addScaledVector(targetVel, tLead);
-      desiredDir.subVectors(_vTarget, enemy.root.position).normalize();
-      desiredSpeed = this.attackSpeed;
+
+      // Apply lateral flanking offset so it doesn't ram straight into the nose
+      _right.crossVectors(_playerFwd, _up).normalize();
+      _vTarget.addScaledVector(_right, this.flankOffset.x);
+      _vTarget.addScaledVector(_up, this.flankOffset.y);
+
+      desiredDir.subVectors(_vTarget, enemyPos).normalize();
+      desiredSpeed = this.maxSpeed;
       enemy.isBoosting = dist > 90;
     }
 
+    // Apply orientation and velocity
     if (desiredDir.lengthSq() > 0.001) {
       _quat.setFromUnitVectors(_fwd, desiredDir);
       enemy.targetQuaternion.slerp(_quat, 1 - Math.exp(-this.turnSpeed * dt));
@@ -289,19 +455,33 @@ export class ChaseBehavior extends BaseBehavior {
       enemy.targetPosition.addScaledVector(enemy.velocity, dt);
       enemy.targetSpeed = desiredSpeed;
 
-      // Bank roll based on angular deflection
-      const crossY = curFwd.x * desiredDir.z - curFwd.z * desiredDir.x;
-      enemy.targetBank = THREE.MathUtils.clamp(crossY * 2.5, -0.75, 0.75);
+      // Bank roll: use explicit maneuver bank if specified, otherwise aerodynamic yaw deflection
+      if (desiredBank !== null) {
+        enemy.targetBank = desiredBank;
+      } else {
+        const crossY = curFwd.x * desiredDir.z - curFwd.z * desiredDir.x;
+        enemy.targetBank = THREE.MathUtils.clamp(crossY * 2.2, -0.72, 0.72);
+      }
     }
   }
 
   onDamaged(enemy, amount, attackerId) {
-    // If caught off-guard from behind, trigger quick evasive jink
-    if (this.state !== 'BREAKAWAY' && Math.random() < 0.4) {
-      this.state = 'BREAKAWAY';
-      this.breakawayTimer = 1.4;
-      this.breakawayDir.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 1.5, 0.8).normalize();
-      this.breakawayDir.applyQuaternion(enemy.root.quaternion);
+    const now = performance.now() / 1000;
+    if (now - this.lastDamageTime < 2.0) {
+      this.damageStreak++;
+    } else {
+      this.damageStreak = 1;
+    }
+    this.lastDamageTime = now;
+
+    // If taking repeated fire from behind, initiate defensive evasive S-turns!
+    if (this.state !== 'EVASIVE' && this.state !== 'EXTEND') {
+      if (this.damageStreak >= 2 || Math.random() < 0.65) {
+        this.state = 'EVASIVE';
+        this.stateTimer = 0;
+        this.evasiveTimer = Math.random() * Math.PI;
+        this.evasiveDuration = 2.2 + Math.random() * 1.0;
+      }
     }
   }
 }
@@ -386,6 +566,7 @@ export const BEHAVIOR_REGISTRY = {
   orbit: OrbitBehavior,
   patrol: PatrolBehavior,
   chase: ChaseBehavior,
+  dogfight: ChaseBehavior,
   drift: DriftBehavior,
   custom: CustomBehavior
 };
