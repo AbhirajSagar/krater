@@ -35,8 +35,16 @@ camera.position.set(0, 3, 10);
 const baseCamPos = new THREE.Vector3(0, 0.8, 5.8);
 const baseCamLook = new THREE.Vector3(0, 0.2, 0);
 
-// Recorder toggle
-const ENABLE_RECORDER = false;
+// ============================================================================
+// FEATURE FLAGS & CONFIGURATION
+// ============================================================================
+/**
+ * Master feature toggle for 16:9 gameplay recording (F9).
+ * - Set to `true` to enable recording UI widget, F9 hotkey, resolution presets, and WebGL buffer retention.
+ * - Set to `false` to disable recording completely, optimizing GPU memory and performance.
+ */
+export const ENABLE_RECORDER = true;
+window.ENABLE_RECORDER = ENABLE_RECORDER;
 
 // 4. Renderer Setup
 const renderer = new THREE.WebGLRenderer({
@@ -85,6 +93,12 @@ let localKills = 0;
 let localDeaths = 0;
 let localScore = 0;
 
+// Multiplayer match tracking for elimination & last-player-standing victory
+const matchParticipants = new Set();
+const matchEliminatedPlayers = new Set();
+let matchWinnerDeclared = false;
+let victoryCheckTimeout = null;
+
 let spaceship = null;
 let spaceDust = null;
 let asteroidField = null;
@@ -132,7 +146,9 @@ const devStatsHUD = new DevStatsHUD({
 });
 
 // Options & Recorder
+let gameplayRecorder = null;
 const optionsMenu = new OptionsMenu({
+  recordingEnabled: ENABLE_RECORDER,
   onLeaveMatch: () => {
     if (client) client.leaveRoom();
     enterMainMenu(true);
@@ -144,12 +160,25 @@ const optionsMenu = new OptionsMenu({
   },
   onGraphicsChange: (config) => {
     applyGraphicsSettings(config);
+  },
+  onRecordQualityChange: (quality) => {
+    if (gameplayRecorder) {
+      gameplayRecorder.setQuality(quality, false);
+    }
   }
 });
 applyGraphicsSettings(optionsMenu.getGraphicsConfig());
 
 devStatsHUD.setVisible(false); // Telemetry stats are only visible during active gameplay
-const gameplayRecorder = new GameplayRecorder(canvas, { enabled: ENABLE_RECORDER });
+gameplayRecorder = new GameplayRecorder(canvas, {
+  enabled: ENABLE_RECORDER,
+  onQualityChange: (quality) => {
+    if (optionsMenu) {
+      optionsMenu.updateRecordResolutionUI(quality);
+    }
+  }
+});
+window.gameplayRecorder = gameplayRecorder;
 
 // Minimal Ammo Telemetry HUD elements
 let minimalAmmoHUD = null;
@@ -319,6 +348,14 @@ function enterMainMenu(advanceSkybox = false) {
   currentGameState = 'MENU';
   isSinglePlayerMode = false;
   hitPauseTimer = 0;
+  matchWinnerDeclared = false;
+  if (victoryCheckTimeout) {
+    clearTimeout(victoryCheckTimeout);
+    victoryCheckTimeout = null;
+  }
+  matchParticipants.clear();
+  matchEliminatedPlayers.clear();
+
   if (optionsMenu) optionsMenu.setInBattle(false);
   if (devStatsHUD) devStatsHUD.setVisible(false);
   if (spaceship) {
@@ -330,6 +367,7 @@ function enterMainMenu(advanceSkybox = false) {
   if (combatHUD) {
     combatHUD.hide();
     combatHUD.hideDestroyedOverlay();
+    combatHUD.hideVictoryOverlay();
   }
   if (lobbyUI) lobbyUI.showMenu();
   if (crosshairContainer) {
@@ -363,10 +401,22 @@ function startBattle(room = null, isSolo = false) {
   currentGameState = 'BATTLE';
   isSinglePlayerMode = Boolean(isSolo || !room || !client?.isConnected || !client?.room);
   hitPauseTimer = 0;
+  matchWinnerDeclared = false;
+  if (victoryCheckTimeout) {
+    clearTimeout(victoryCheckTimeout);
+    victoryCheckTimeout = null;
+  }
+  matchParticipants.clear();
+  matchEliminatedPlayers.clear();
+
   if (optionsMenu) optionsMenu.setInBattle(true);
   if (devStatsHUD) devStatsHUD.setVisible(optionsMenu.devStatsEnabled);
   if (lobbyUI) lobbyUI.hideAll();
-  if (combatHUD) combatHUD.show();
+  if (combatHUD) {
+    combatHUD.hideDestroyedOverlay();
+    combatHUD.hideVictoryOverlay();
+    combatHUD.show();
+  }
 
   // Keep the exact same skybox that is currently displayed in the menu for gameplay
 
@@ -408,6 +458,17 @@ function startBattle(room = null, isSolo = false) {
 
   if (room && client) {
     if (combatHUD) combatHUD.setRoomInfo(room.code);
+    if (client.playerId) {
+      matchParticipants.add(client.playerId);
+    }
+    if (Array.isArray(room.players)) {
+      for (const p of room.players) {
+        matchParticipants.add(p.id);
+        if (p.state?.isDestroyed) {
+          matchEliminatedPlayers.add(p.id);
+        }
+      }
+    }
     if (room.customData?.mapId && mapManager) {
       mapManager.loadMapById(room.customData.mapId).catch(() => {});
     } else if (room.customData?.skybox && skyboxManager) {
@@ -506,6 +567,90 @@ function syncScoreboard() {
     };
   }
   combatHUD.updateScoreboard(all, client.playerId);
+}
+
+function checkMatchVictory() {
+  if (isSinglePlayerMode || matchWinnerDeclared || currentGameState !== 'BATTLE') return;
+  if (!client || !client.room) return;
+
+  // At least 2 pilots must have participated in the match
+  if (matchParticipants.size < 2) return;
+
+  // Determine which pilots are still alive
+  const alivePilots = [];
+
+  // 1. Check local pilot
+  const isLocalAlive = Boolean(spaceship && !spaceship.isDestroyed && !matchEliminatedPlayers.has(client.playerId));
+  if (isLocalAlive) {
+    alivePilots.push({
+      id: client.playerId,
+      name: lobbyUI ? lobbyUI.callsign : 'Pilot',
+      isLocal: true
+    });
+  }
+
+  // 2. Check remote pilots
+  if (remotePlayersManager) {
+    for (const [id, remotePlayer] of remotePlayersManager.players.entries()) {
+      if (matchParticipants.has(id) && !matchEliminatedPlayers.has(id) && !remotePlayer.isDestroyed) {
+        alivePilots.push({
+          id,
+          name: remotePlayer.name || 'Remote Pilot',
+          isLocal: false
+        });
+      }
+    }
+  }
+
+  // If exactly one pilot is standing, they are the sole survivor & victor!
+  if (alivePilots.length === 1) {
+    const winner = alivePilots[0];
+    matchWinnerDeclared = true;
+
+    if (winner.isLocal) {
+      // Graceful 1.2s cinematic delay so the last destroyed opponent's explosion finishes cleanly
+      if (victoryCheckTimeout) clearTimeout(victoryCheckTimeout);
+      victoryCheckTimeout = setTimeout(() => {
+        if (currentGameState !== 'BATTLE') return;
+
+        // Relay victory broadcast to all room peers
+        client.relay('MATCH_VICTORY', {
+          winnerId: client.playerId,
+          winnerName: lobbyUI ? lobbyUI.callsign : 'Pilot',
+          kills: localKills,
+          score: localScore
+        }, 'all');
+
+        triggerVictoryCelebration({
+          callsign: lobbyUI ? lobbyUI.callsign : 'Pilot',
+          kills: localKills,
+          score: localScore,
+          shipName: SPACESHIP_CONFIGS[lobbyUI?.selectedShipIndex || 0]?.name || 'StarSparrow'
+        });
+      }, 1200);
+    }
+  }
+}
+
+function triggerVictoryCelebration({ callsign, kills, score, shipName }) {
+  if (currentGameState !== 'BATTLE') return;
+
+  // Gracefully decelerate and coast ship smoothly
+  if (spaceship) {
+    spaceship.enabled = false;
+    spaceship.currentSpeed = Math.min(spaceship.currentSpeed, 14);
+  }
+
+  // Announce sector dominance
+  if (combatHUD) {
+    combatHUD.showCombatBanner('VICTORY · LAST PILOT STANDING');
+    combatHUD.showVictoryOverlay({
+      callsign,
+      kills,
+      score,
+      shipName
+    });
+  }
 }
 
 // Slow Motion Feedback on Spaceship Explosion (Single Player Mode Only)
@@ -734,6 +879,7 @@ function bindNetworkEvents() {
     if (lobbyUI) lobbyUI.updateRosterUI();
     if (currentGameState === 'BATTLE' && remotePlayersManager && combatHUD) {
       remotePlayersManager.addPlayer(player);
+      matchParticipants.add(player.id);
       combatHUD.showCombatBanner(`PILOT ${player.name.toUpperCase()} ENTERED SECTOR`);
       combatHUD.addChatMessage('SYSTEM', `${player.name} joined the dogfight`, true);
     }
@@ -746,6 +892,17 @@ function bindNetworkEvents() {
       const name = p ? p.name : 'Unknown Pilot';
       remotePlayersManager.removePlayer(payload.playerId);
       combatHUD.addChatMessage('SYSTEM', `${name} left the arena`, true);
+      if (!isSinglePlayerMode) {
+        matchEliminatedPlayers.add(payload.playerId);
+        checkMatchVictory();
+      }
+    }
+  });
+
+  client.on('playerDisconnected', (payload) => {
+    if (currentGameState === 'BATTLE' && !isSinglePlayerMode && payload?.playerId) {
+      matchEliminatedPlayers.add(payload.playerId);
+      checkMatchVictory();
     }
   });
 
@@ -762,7 +919,9 @@ function bindNetworkEvents() {
   });
 
   client.on('gameEnded', () => {
-    if (combatHUD) combatHUD.showResults('BATTLE CONCLUDED', 'ALL PILOTS', '<p>Sector secured. Good fight!</p>');
+    if (!matchWinnerDeclared && combatHUD) {
+      combatHUD.showCombatBanner('SECTOR SECURED · BATTLE CONCLUDED');
+    }
   });
 
   client.on('kicked', () => {
@@ -832,15 +991,15 @@ function bindNetworkEvents() {
       if (lobbyUI) {
         lobbyUI.showToast(`TARGET DESTROYED: ${victimName.toUpperCase()}`, 'success');
       }
-
-      // If local killer is room host, enforce kick on the eliminated player
-      if (client.room && client.room.hostId === client.playerId) {
-        client.kickPlayer(data.victimId, 'Vessel destroyed in combat').catch(() => {});
-      }
     }
 
     if (isLocalVictim && spaceship && !spaceship.isDestroyed) {
       spaceship.takeDamage(999, data.killerId);
+    }
+
+    if (!isSinglePlayerMode && data.victimId) {
+      matchEliminatedPlayers.add(data.victimId);
+      checkMatchVictory();
     }
 
     syncScoreboard();
@@ -848,6 +1007,22 @@ function bindNetworkEvents() {
 
   client.on('relay:PLAYER_RESPAWNED', (data) => {
     if (remotePlayersManager) remotePlayersManager.handlePlayerRespawned(data.playerId, data.pos);
+  });
+
+  client.on('relay:MATCH_VICTORY', (data) => {
+    matchWinnerDeclared = true;
+    if (data.winnerId === client.playerId) {
+      triggerVictoryCelebration({
+        callsign: data.winnerName || (lobbyUI ? lobbyUI.callsign : 'Pilot'),
+        kills: data.kills ?? localKills,
+        score: data.score ?? localScore,
+        shipName: SPACESHIP_CONFIGS[lobbyUI?.selectedShipIndex || 0]?.name || 'StarSparrow'
+      });
+    } else {
+      if (combatHUD) {
+        combatHUD.notifyMatchConcluded(data.winnerName);
+      }
+    }
   });
 
   client.on('relay:REQUEST_WORLD_STATE', (data, senderId) => {
@@ -1018,6 +1193,7 @@ function bindNetworkEvents() {
       if (currentGameState === 'BATTLE' && client && client.isConnected && client.room) {
         client.relay('PLAYER_KILLED', { victimId: client.playerId, killerId }, 'all');
         client.updatePlayerState({ deaths: localDeaths, isDestroyed: true });
+        matchEliminatedPlayers.add(client.playerId);
       }
 
       // Determine killer identity
@@ -1032,9 +1208,18 @@ function bindNetworkEvents() {
         }
       }
 
-      // Present dedicated death screen with countdown, Respawn Now, and Return to Menu
+      // Present dedicated death screen:
+      // In multiplayer: Cannot respawn, only option to return to menu is shown
+      // In singleplayer: Auto-respawn countdown and manual respawn available
       if (combatHUD) {
-        combatHUD.showDestroyedOverlay(killerName, 5);
+        combatHUD.showDestroyedOverlay(killerName, {
+          canRespawn: isSinglePlayerMode,
+          countdownSec: 5
+        });
+      }
+
+      if (!isSinglePlayerMode) {
+        checkMatchVictory();
       }
     };
   }
@@ -1286,6 +1471,9 @@ async function initPipeline() {
       if (client && lobbyUI) client.relay('CHAT_MESSAGE', { sender: lobbyUI.callsign, text }, 'all');
     },
     onRespawnRequest: () => {
+      // In multiplayer, players cannot respawn once destroyed
+      if (!isSinglePlayerMode) return;
+
       combatHUD.hideDestroyedOverlay();
 
       // Dynamic spawn placement around arena
@@ -1345,7 +1533,12 @@ async function initPipeline() {
     },
     onLeaveMatch: () => {
       combatHUD.hideDestroyedOverlay();
-      if (client && client.isInRoom()) client.leaveRoom();
+      combatHUD.hideVictoryOverlay();
+      if (client && typeof client.isInRoom === 'function' && client.isInRoom()) {
+        client.leaveRoom();
+      } else if (client && client.room) {
+        client.leaveRoom();
+      }
       enterMainMenu(true);
     }
   });
@@ -1405,7 +1598,9 @@ async function initPipeline() {
   await loadingScreen.finish();
 
   optionsMenu.showToggleButton();
-  gameplayRecorder.showToggleButton();
+  if (ENABLE_RECORDER && gameplayRecorder) {
+    gameplayRecorder.showToggleButton();
+  }
 
   // Handle URL Deep-Linking Auto-Join
   const urlParams = new URLSearchParams(window.location.search);

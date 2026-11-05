@@ -39,6 +39,7 @@ export class CombatHUD {
     this.isChatOpen = false;
     this.isScoreboardOpen = false;
     this.isDestroyed = false;
+    this.canRespawn = true;
     this.respawnTimer = 0;
     this._activePlayerIds = new Set();
 
@@ -98,19 +99,64 @@ export class CombatHUD {
         <canvas id="hud-radar-canvas" width="110" height="110" class="radar-canvas"></canvas>
       </div>
 
-      <!-- DESTRUCTION & RESPAWN OVERLAY -->
+      <!-- DESTRUCTION & RESPAWN / ELIMINATED OVERLAY -->
       <div class="hud-respawn-backdrop hidden" id="hud-respawn-overlay">
         <div class="respawn-glass-card">
-          <div class="respawn-badge">VESSEL COMPROMISED</div>
-          <div class="respawn-title-clean">CRITICAL DAMAGE</div>
+          <div class="respawn-badge" id="hud-respawn-badge">VESSEL COMPROMISED</div>
+          <div class="respawn-title-clean" id="hud-respawn-title">CRITICAL DAMAGE</div>
           <div class="respawn-killer-clean" id="hud-killer-text">Eliminated by enemy laser fire</div>
-          <div class="respawn-timer-wrap">
+          <div class="respawn-timer-wrap" id="hud-respawn-timer-wrap">
             <span class="respawn-digits" id="hud-respawn-countdown">5</span>
             <span class="respawn-seconds-label">seconds to auto-respawn</span>
+          </div>
+          <div class="respawn-eliminated-notice hidden" id="hud-eliminated-notice">
+            <span>MULTIPLAYER MATCH IN PROGRESS</span>
+            <span class="eliminated-notice-sub">Respawn unavailable for eliminated vessels</span>
           </div>
           <div class="respawn-actions-row">
             <button id="btn-manual-respawn" class="btn-primary-solid" type="button">Respawn Now</button>
             <button id="btn-respawn-leave" class="btn-secondary-outline" type="button">Return to Menu</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRACEFUL VICTORY OVERLAY (LAST PILOT STANDING) -->
+      <div class="hud-victory-backdrop hidden" id="hud-victory-overlay">
+        <div class="victory-glass-card">
+          <div class="victory-glow-aura" aria-hidden="true"></div>
+          <div class="victory-header-block">
+            <div class="victory-badge">
+              ${Icons.trophy(14)}
+              <span>LAST PILOT STANDING</span>
+            </div>
+            <div class="victory-title">VICTORY</div>
+            <div class="victory-subtitle">SECTOR DOMINANCE SECURED</div>
+          </div>
+
+          <div class="victory-stats-grid">
+            <div class="victory-stat-card">
+              <span class="victory-stat-label">CALLSIGN</span>
+              <span class="victory-stat-value" id="hud-victory-callsign">--</span>
+            </div>
+            <div class="victory-stat-card">
+              <span class="victory-stat-label">CONFIRMED KILLS</span>
+              <span class="victory-stat-value text-accent" id="hud-victory-kills">0</span>
+            </div>
+            <div class="victory-stat-card">
+              <span class="victory-stat-label">COMBAT SCORE</span>
+              <span class="victory-stat-value text-accent" id="hud-victory-score">0</span>
+            </div>
+            <div class="victory-stat-card">
+              <span class="victory-stat-label">VESSEL VARIANT</span>
+              <span class="victory-stat-value" id="hud-victory-ship">StarSparrow</span>
+            </div>
+          </div>
+
+          <div class="victory-actions-row">
+            <button id="btn-victory-leave" class="btn-primary-solid victory-btn" type="button">
+              ${Icons.arrowLeft(15)}
+              <span>RETURN TO HANGAR</span>
+            </button>
           </div>
         </div>
       </div>
@@ -129,10 +175,21 @@ export class CombatHUD {
     this.radarCtx = this.radarCanvas ? this.radarCanvas.getContext('2d') : null;
 
     this.respawnOverlayEl = document.getElementById('hud-respawn-overlay');
+    this.respawnBadgeEl = document.getElementById('hud-respawn-badge');
+    this.respawnTitleEl = document.getElementById('hud-respawn-title');
+    this.respawnTimerWrapEl = document.getElementById('hud-respawn-timer-wrap');
+    this.eliminatedNoticeEl = document.getElementById('hud-eliminated-notice');
     this.killerTextEl = document.getElementById('hud-killer-text');
     this.respawnCountdownEl = document.getElementById('hud-respawn-countdown');
     this.manualRespawnBtn = document.getElementById('btn-manual-respawn');
     this.respawnLeaveBtn = document.getElementById('btn-respawn-leave');
+
+    this.victoryOverlayEl = document.getElementById('hud-victory-overlay');
+    this.victoryCallsignEl = document.getElementById('hud-victory-callsign');
+    this.victoryKillsEl = document.getElementById('hud-victory-kills');
+    this.victoryScoreEl = document.getElementById('hud-victory-score');
+    this.victoryShipEl = document.getElementById('hud-victory-ship');
+    this.victoryLeaveBtn = document.getElementById('btn-victory-leave');
 
     this.hitpauseFlashEl = document.getElementById('hud-hitpause-flash');
     this._hitmarkerTimer = null;
@@ -141,6 +198,7 @@ export class CombatHUD {
 
   setupListeners() {
     const triggerRespawn = (e) => {
+      if (!this.canRespawn) return;
       if (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -176,9 +234,27 @@ export class CombatHUD {
       this.respawnLeaveBtn.addEventListener('touchend', triggerLeave, { passive: false });
     }
 
-    // Space / Enter quick-respawn shortcut
+    if (this.victoryLeaveBtn) {
+      const triggerVictoryLeave = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        this.hideVictoryOverlay();
+        if (this.onLeaveMatch) {
+          this.onLeaveMatch();
+        }
+      };
+      this.victoryLeaveBtn.addEventListener('click', triggerVictoryLeave);
+      this.victoryLeaveBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+      });
+      this.victoryLeaveBtn.addEventListener('touchend', triggerVictoryLeave, { passive: false });
+    }
+
+    // Space / Enter quick-respawn shortcut (strictly only if canRespawn is true)
     window.addEventListener('keydown', (e) => {
-      if (!this.isDestroyed) return;
+      if (!this.isDestroyed || !this.canRespawn) return;
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         triggerRespawn(e);
@@ -192,6 +268,8 @@ export class CombatHUD {
 
   hide() {
     this.container.classList.remove('visible');
+    this.hideDestroyedOverlay();
+    this.hideVictoryOverlay();
     this.clearTargets();
   }
 
@@ -548,15 +626,54 @@ export class CombatHUD {
     }).join('');
   }
 
-  showDestroyedOverlay(killerName = 'Enemy Laser Fire', countdownSec = 5) {
+  showDestroyedOverlay(killerName = 'Enemy Laser Fire', options = 5) {
+    let countdownSec = 5;
+    let canRespawn = true;
+    if (typeof options === 'number') {
+      countdownSec = options;
+      canRespawn = true;
+    } else if (typeof options === 'object' && options !== null) {
+      if (options.countdownSec !== undefined) countdownSec = options.countdownSec;
+      if (options.canRespawn !== undefined) canRespawn = Boolean(options.canRespawn);
+    }
+
     this.isDestroyed = true;
-    this.respawnTimer = countdownSec;
+    this.canRespawn = canRespawn;
+    this.respawnTimer = canRespawn ? countdownSec : 0;
+
     if (this.killerTextEl) {
       this.killerTextEl.textContent = `Eliminated by ${killerName}`;
     }
-    if (this.respawnCountdownEl) {
-      this.respawnCountdownEl.textContent = Math.ceil(this.respawnTimer);
+
+    if (canRespawn) {
+      if (this.respawnBadgeEl) this.respawnBadgeEl.textContent = 'VESSEL COMPROMISED';
+      if (this.respawnTitleEl) this.respawnTitleEl.textContent = 'CRITICAL DAMAGE';
+      if (this.respawnCountdownEl) this.respawnCountdownEl.textContent = Math.ceil(this.respawnTimer);
+      this.respawnTimerWrapEl?.classList.remove('hidden');
+      this.eliminatedNoticeEl?.classList.add('hidden');
+      this.manualRespawnBtn?.classList.remove('hidden');
+      if (this.respawnLeaveBtn) {
+        this.respawnLeaveBtn.className = 'btn-secondary-outline';
+        this.respawnLeaveBtn.textContent = 'Return to Menu';
+      }
+    } else {
+      if (this.respawnBadgeEl) this.respawnBadgeEl.textContent = 'VESSEL DESTROYED';
+      if (this.respawnTitleEl) this.respawnTitleEl.textContent = 'ELIMINATED';
+      this.respawnTimerWrapEl?.classList.add('hidden');
+      if (this.eliminatedNoticeEl) {
+        this.eliminatedNoticeEl.classList.remove('hidden');
+        this.eliminatedNoticeEl.innerHTML = `
+          <span>MULTIPLAYER MATCH IN PROGRESS</span>
+          <span class="eliminated-notice-sub">Respawn unavailable for eliminated vessels</span>
+        `;
+      }
+      this.manualRespawnBtn?.classList.add('hidden');
+      if (this.respawnLeaveBtn) {
+        this.respawnLeaveBtn.className = 'btn-primary-solid';
+        this.respawnLeaveBtn.textContent = 'RETURN TO MENU';
+      }
     }
+
     this.respawnOverlayEl?.classList.remove('hidden');
     this.container?.classList.add('overlay-active');
 
@@ -572,9 +689,46 @@ export class CombatHUD {
     }
   }
 
+  notifyMatchConcluded(winnerName = 'Hostile Pilot') {
+    if (this.eliminatedNoticeEl) {
+      this.eliminatedNoticeEl.classList.remove('hidden');
+      this.eliminatedNoticeEl.innerHTML = `
+        <span>MATCH CONCLUDED · PILOT ${escapeHTML(winnerName.toUpperCase())} WON</span>
+        <span class="eliminated-notice-sub">Sector secured. Return to hangar to deploy again.</span>
+      `;
+    }
+  }
+
   hideDestroyedOverlay() {
     this.isDestroyed = false;
+    this.canRespawn = true;
+    this.respawnTimer = 0;
     this.respawnOverlayEl?.classList.add('hidden');
+    this.container?.classList.remove('overlay-active');
+  }
+
+  showVictoryOverlay({ callsign = 'Pilot', kills = 0, score = 0, shipName = 'StarSparrow' } = {}) {
+    if (this.victoryCallsignEl) this.victoryCallsignEl.textContent = callsign;
+    if (this.victoryKillsEl) this.victoryKillsEl.textContent = kills;
+    if (this.victoryScoreEl) this.victoryScoreEl.textContent = score;
+    if (this.victoryShipEl) this.victoryShipEl.textContent = shipName;
+
+    this.victoryOverlayEl?.classList.remove('hidden');
+    this.container?.classList.add('overlay-active');
+
+    const crosshair = document.getElementById('crosshair-container');
+    if (crosshair) {
+      crosshair.classList.remove('visible');
+      crosshair.style.display = 'none';
+    }
+    const touchControls = document.getElementById('touch-controls');
+    if (touchControls) {
+      touchControls.classList.remove('visible');
+    }
+  }
+
+  hideVictoryOverlay() {
+    this.victoryOverlayEl?.classList.add('hidden');
     this.container?.classList.remove('overlay-active');
   }
 
@@ -590,7 +744,7 @@ export class CombatHUD {
   }
 
   update(dt, camera, localShipPos, localShipQuat, remotePlayersManager, asteroidField, enemyManager = null) {
-    if (this.isDestroyed && this.respawnTimer > 0) {
+    if (this.isDestroyed && this.canRespawn && this.respawnTimer > 0) {
       this.respawnTimer -= dt;
       if (this.respawnCountdownEl) {
         this.respawnCountdownEl.textContent = Math.max(0, Math.ceil(this.respawnTimer));

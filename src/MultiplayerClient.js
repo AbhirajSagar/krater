@@ -476,6 +476,10 @@ export class MultiplayerClient {
     return res;
   }
 
+  isInRoom() {
+    return Boolean(this.isConnected && this.room && this.room.id);
+  }
+
   async leaveRoom() {
     try {
       const res = await this.request('LEAVE_ROOM');

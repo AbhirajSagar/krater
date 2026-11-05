@@ -12,6 +12,8 @@ export class OptionsMenu {
     this.onLeaveMatch = options.onLeaveMatch || null;
     this.onToggleDevStats = options.onToggleDevStats || null;
     this.onGraphicsChange = options.onGraphicsChange || null;
+    this.onRecordQualityChange = options.onRecordQualityChange || null;
+    this.recordingEnabled = options.recordingEnabled ?? true;
     this.isOpen = false;
     this.canControl = false;
     this.inBattle = false;
@@ -20,6 +22,7 @@ export class OptionsMenu {
     this.devStatsEnabled = false;
     this.graphicsPreset = 'high'; // 'high', 'balanced', 'performance'
     this.shadowsEnabled = true;
+    this.recordQuality = '1080p';
 
     try {
       if (typeof localStorage !== 'undefined') {
@@ -28,6 +31,8 @@ export class OptionsMenu {
         if (savedPreset) this.graphicsPreset = savedPreset;
         const savedShadows = localStorage.getItem('spacegame_shadows');
         if (savedShadows !== null) this.shadowsEnabled = savedShadows === 'true';
+        const savedQuality = localStorage.getItem('spacegame_record_quality');
+        if (savedQuality) this.recordQuality = savedQuality;
       }
     } catch {
       this.devStatsEnabled = false;
@@ -38,6 +43,7 @@ export class OptionsMenu {
     this.updateFullscreenUI();
     this.updateDevStatsUI();
     this.updateGraphicsUI();
+    this.updateRecordResolutionUI(this.recordQuality);
   }
 
   setSpaceship(spaceship) {
@@ -147,6 +153,17 @@ export class OptionsMenu {
               </button>
             </div>
 
+            <!-- Gameplay Recording Resolution Row -->
+            <div id="option-row-record-quality" class="option-row">
+              <div class="option-info">
+                <span class="option-label">Recording Resolution <span class="hotkey-badge">F9</span></span>
+                <span class="option-desc" id="desc-record-quality">1920×1080 • Broadcast standard 60 FPS</span>
+              </div>
+              <button id="btn-record-quality-toggle" class="glass-btn-sm" aria-label="Cycle Recording Resolution">
+                <span id="label-record-quality">1080p</span>
+              </button>
+            </div>
+
             <!-- Stats for Nerds / Developer Telemetry Row (Gameplay only) -->
             <div id="option-row-dev-stats" class="option-row hidden">
               <div class="option-info">
@@ -191,6 +208,11 @@ export class OptionsMenu {
     this.shadowsBtn = document.getElementById('btn-shadows-toggle');
     this.shadowsToggleDot = document.getElementById('shadows-toggle-dot');
     this.labelShadows = document.getElementById('label-shadows');
+    this.recordQualityRow = document.getElementById('option-row-record-quality');
+    this.recordQualityBtn = document.getElementById('btn-record-quality-toggle');
+    this.labelRecordQuality = document.getElementById('label-record-quality');
+    this.descRecordQuality = document.getElementById('desc-record-quality');
+    this.setRecordingEnabled(this.recordingEnabled);
     this.devStatsBtn = document.getElementById('btn-dev-stats-toggle');
     this.devToggleDot = document.getElementById('dev-toggle-dot');
     this.labelDevStats = document.getElementById('label-dev-stats');
@@ -242,6 +264,12 @@ export class OptionsMenu {
     this.shadowsBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.toggleShadows();
+    });
+
+    // Recording quality toggle button action
+    this.recordQualityBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.cycleRecordQuality();
     });
 
     // Dev stats toggle button action
@@ -519,6 +547,50 @@ export class OptionsMenu {
 
     if (this.labelShadows) {
       this.labelShadows.textContent = this.shadowsEnabled ? 'ON' : 'OFF';
+    }
+  }
+
+  cycleRecordQuality() {
+    const cycle = {
+      '480p': '720p',
+      '720p': '1080p',
+      '1080p': '1440p',
+      '1440p': '4k',
+      '4k': '480p'
+    };
+    this.recordQuality = cycle[this.recordQuality] || '1080p';
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_record_quality', this.recordQuality);
+      }
+    } catch (_) {}
+    this.updateRecordResolutionUI(this.recordQuality);
+    if (this.onRecordQualityChange) {
+      this.onRecordQualityChange(this.recordQuality);
+    }
+  }
+
+  updateRecordResolutionUI(quality) {
+    this.recordQuality = quality;
+    if (this.labelRecordQuality) {
+      this.labelRecordQuality.textContent = quality;
+    }
+    if (this.descRecordQuality) {
+      const descs = {
+        '480p': '854×480 • 60 FPS • Lightweight',
+        '720p': '1280×720 • 60 FPS • Standard HD',
+        '1080p': '1920×1080 • 60 FPS • Broadcast Full HD',
+        '1440p': '2560×1440 • 60 FPS • Crisp 2K QHD',
+        '4k': '3840×2160 • 60 FPS • Maximum 4K Detail'
+      };
+      this.descRecordQuality.textContent = descs[quality] || `${quality} Widescreen 60 FPS`;
+    }
+  }
+
+  setRecordingEnabled(enabled) {
+    this.recordingEnabled = Boolean(enabled);
+    if (this.recordQualityRow) {
+      this.recordQualityRow.classList.toggle('hidden', !this.recordingEnabled);
     }
   }
 }
