@@ -82,6 +82,16 @@ export class StationaryBehavior extends BaseBehavior {
       }
     }
   }
+
+  onDamaged(enemy, amount, attackerId, hitPoint = null) {
+    // Sharp defensive jink / dip when taking heavy fire
+    if (this.anchorPosition) {
+      const shiftX = (Math.random() - 0.5) * 6.0;
+      const shiftY = -(4.0 + Math.random() * 5.0);
+      const shiftZ = (Math.random() - 0.5) * 6.0;
+      enemy.targetPosition.add(new THREE.Vector3(shiftX, shiftY, shiftZ));
+    }
+  }
 }
 
 /**
@@ -102,6 +112,14 @@ export class OrbitBehavior extends BaseBehavior {
     this.anchor = options.anchor ?? 'player';
     this.angle = options.initialAngle ?? (Math.random() * Math.PI * 2);
     this.time = Math.random() * 10;
+
+    // Evasive duck break state on taking damage
+    this.duckTimer = 0;
+    this.duckAltitude = 0;
+    this.duckRadiusOffset = 0;
+    this.duckSpeedMult = 1.0;
+    this.damageStreak = 0;
+    this.lastDamageTime = 0;
   }
 
   init(enemy) {
@@ -110,10 +128,48 @@ export class OrbitBehavior extends BaseBehavior {
     this.height = pos.y;
   }
 
+  onDamaged(enemy, amount, attackerId, hitPoint = null) {
+    const now = performance.now() / 1000;
+    if (now - this.lastDamageTime < 2.5) {
+      this.damageStreak++;
+    } else {
+      this.damageStreak = 1;
+    }
+    this.lastDamageTime = now;
+
+    // Subtle impact nudge: brief minor shudder, no huge altitude plunge or speed boost
+    this.duckTimer = 0.25;
+    this.duckAltitude = -(0.5 + Math.random() * 0.4); // Subtle ~0.7m nudge
+    this.duckRadiusOffset = (Math.random() > 0.5 ? 1 : -1) * (0.5 + Math.random() * 0.4);
+    this.duckSpeedMult = 1.0; // Maintain steady orbit speed, no boosting away
+
+    // Invert orbit direction if taking heavy continuous fire
+    if (this.damageStreak >= 5) {
+      this.clockwise = !this.clockwise;
+      this.damageStreak = 0;
+    }
+  }
+
   update(dt, enemy, context) {
     this.time += dt;
+
+    // Impact nudge recovery
+    if (this.duckTimer > 0) {
+      this.duckTimer -= dt;
+      const decay = 1 - Math.exp(-12 * dt);
+      this.duckAltitude = THREE.MathUtils.lerp(this.duckAltitude, 0, decay);
+      this.duckRadiusOffset = THREE.MathUtils.lerp(this.duckRadiusOffset, 0, decay);
+      this.duckSpeedMult = THREE.MathUtils.lerp(this.duckSpeedMult, 1.0, decay);
+    } else {
+      this.duckAltitude = 0;
+      this.duckRadiusOffset = 0;
+      this.duckSpeedMult = 1.0;
+    }
+
+    const currentSpeed = this.speed * this.duckSpeedMult;
+    const currentRadius = Math.max(25, this.radius + this.duckRadiusOffset);
     const dirSign = this.clockwise ? -1 : 1;
-    this.angle += this.speed * dirSign * dt;
+    this.angle += currentSpeed * dirSign * dt;
 
     let center = this.anchor;
     if ((this.anchor === 'player' || !this.anchor) && context.playerPosition) {
@@ -124,13 +180,13 @@ export class OrbitBehavior extends BaseBehavior {
     const cy = (center && typeof center.y === 'number') ? center.y : (Array.isArray(center) ? center[1] : 0);
     const cz = (center && typeof center.z === 'number') ? center.z : (Array.isArray(center) ? center[2] : 0);
 
-    const tx = cx + Math.cos(this.angle) * this.radius;
-    const ty = cy + this.height + Math.sin(this.time * this.wobbleFreq) * this.wobbleAmp;
-    const tz = cz + Math.sin(this.angle) * this.radius;
+    const tx = cx + Math.cos(this.angle) * currentRadius;
+    const ty = cy + this.height + this.duckAltitude + Math.sin(this.time * this.wobbleFreq) * this.wobbleAmp;
+    const tz = cz + Math.sin(this.angle) * currentRadius;
 
-    const vx = -Math.sin(this.angle) * this.radius * this.speed * dirSign;
+    const vx = -Math.sin(this.angle) * currentRadius * currentSpeed * dirSign;
     const vy = Math.cos(this.time * this.wobbleFreq) * this.wobbleAmp * this.wobbleFreq;
-    const vz = Math.cos(this.angle) * this.radius * this.speed * dirSign;
+    const vz = Math.cos(this.angle) * currentRadius * currentSpeed * dirSign;
 
     enemy.targetPosition.set(tx, ty, tz);
     enemy.velocity.set(vx, vy, vz);
@@ -141,8 +197,9 @@ export class OrbitBehavior extends BaseBehavior {
       enemy.targetQuaternion.setFromUnitVectors(_fwd, _v1);
     }
 
-    // Bank into orbit curve
-    const bankMagnitude = 0.42 * (this.clockwise ? -1 : 1);
+    // Bank into orbit curve (subtle banking during impact nudge)
+    const duckBankExtra = this.duckTimer > 0 ? 0.05 : 0;
+    const bankMagnitude = (0.42 + duckBankExtra) * (this.clockwise ? -1 : 1);
     enemy.targetBank = bankMagnitude;
   }
 }
@@ -211,6 +268,13 @@ export class PatrolBehavior extends BaseBehavior {
       const crossY = curFwd.x * toWp.z - curFwd.z * toWp.x;
       enemy.targetBank = THREE.MathUtils.clamp(crossY * 2.0, -0.65, 0.65);
     }
+  }
+
+  onDamaged(enemy, amount, attackerId, hitPoint = null) {
+    // Evasive speed burst and bank
+    this.speed = Math.min(60, this.speed * 1.4);
+    enemy.isBoosting = true;
+    enemy.targetBank = (Math.random() > 0.5 ? 1 : -1) * 0.8;
   }
 }
 
@@ -304,6 +368,16 @@ export class ChaseBehavior extends BaseBehavior {
 
     // State Transitions
     switch (this.state) {
+      case 'DUCK_BREAK':
+        if (this.stateTimer >= (this.duckDuration || 1.4)) {
+          // Finished high-G duck break dive, transition into combat turn
+          this.state = 'COMBAT_TURN';
+          this.stateTimer = 0;
+          this.turnDirection = this.flankSign;
+          this.verticalBias = (Math.random() - 0.5) * 0.35;
+        }
+        break;
+
       case 'EVASIVE':
         if (this.stateTimer >= this.evasiveDuration) {
           // Finished evasive weave, transition into a smooth combat turn to loop back
@@ -433,6 +507,18 @@ export class ChaseBehavior extends BaseBehavior {
       enemy.isBoosting = false;
       desiredBank = -this.turnDirection * 0.68; // ~39 deg bank!
 
+    } else if (this.state === 'DUCK_BREAK') {
+      // DUCK & BREAK: Aggressive defensive dive beneath the player's sights with hard roll
+      _right.crossVectors(enemyFwd, _up).normalize();
+      desiredDir.copy(enemyFwd).multiplyScalar(0.35)
+        .addScaledVector(_right, this.turnDirection * 0.75)
+        .addScaledVector(_up, this.verticalBias * 0.9)
+        .normalize();
+
+      desiredSpeed = this.attackSpeed * 1.15;
+      enemy.isBoosting = true;
+      desiredBank = -this.turnDirection * 1.05; // ~60° high-G defensive roll!
+
     } else if (this.state === 'EVASIVE') {
       // S-turn weave ahead of the player
       const freq = 2.0;
@@ -484,7 +570,7 @@ export class ChaseBehavior extends BaseBehavior {
     }
   }
 
-  onDamaged(enemy, amount, attackerId) {
+  onDamaged(enemy, amount, attackerId, hitPoint = null) {
     const now = performance.now() / 1000;
     if (now - this.lastDamageTime < 2.0) {
       this.damageStreak++;
@@ -493,13 +579,15 @@ export class ChaseBehavior extends BaseBehavior {
     }
     this.lastDamageTime = now;
 
-    // If taking fire, immediately break away into EVASIVE weaves ahead of the player!
-    if (this.state !== 'EVASIVE') {
-      this.state = 'EVASIVE';
+    // Maintain dogfight engagement: do NOT dive beneath the player's nose on hit.
+    // If under sustained barrage (5+ hits), execute a smooth combat turn rather than an extreme dive.
+    if (this.damageStreak >= 5 && this.state !== 'COMBAT_TURN' && this.state !== 'EVASIVE') {
+      this.state = 'COMBAT_TURN';
       this.stateTimer = 0;
-      this.evasiveTimer = Math.random() * Math.PI;
-      this.evasiveDuration = 2.2 + Math.random() * 0.8;
-      this.tailCooldown = 6.0 + Math.random() * 3.0; // Reset tail cooldown so it doesn't immediately try to tail again!
+      this.turnDirection = Math.random() > 0.5 ? 1 : -1;
+      this.verticalBias = (Math.random() - 0.5) * 0.2;
+      this.tailCooldown = 6.0;
+      this.damageStreak = 0;
     }
   }
 }
@@ -546,6 +634,16 @@ export class DriftBehavior extends BaseBehavior {
     enemy.targetPosition.addScaledVector(enemy.velocity, dt);
     enemy.targetSpeed = this.driftSpeed;
     enemy.targetBank = THREE.MathUtils.lerp(enemy.targetBank, 0, 1 - Math.exp(-2 * dt));
+  }
+
+  onDamaged(enemy, amount, attackerId, hitPoint = null) {
+    this.timer = 0;
+    // Subtle deflection, no downward dive or boost
+    this.currentDriftDir.set(
+      (Math.random() - 0.5) * 0.8,
+      (Math.random() - 0.5) * 0.4,
+      (Math.random() - 0.5) * 0.8
+    ).normalize();
   }
 }
 

@@ -50,6 +50,14 @@ export class AIEnemy extends EnemyEntity {
 
     // Callback fired when this AI enemy shoots a laser
     this.onFireLaser = options.onFireLaser || null;
+
+    // Evasive duck & jink maneuver state
+    this.isDucking = false;
+    this.duckTimer = 0;
+    this.duckDuration = 0;
+    this.duckOffset = new THREE.Vector3();
+    this.duckTargetOffset = new THREE.Vector3();
+    this.duckBank = 0;
   }
 
   /**
@@ -65,10 +73,44 @@ export class AIEnemy extends EnemyEntity {
     this.behavior.init(this);
   }
 
+  /**
+   * Applies a brief, tactile micro-nudge on taking laser damage.
+   * Gives instant physical impact feedback without ducking or diving out of sight.
+   */
+  triggerDuck(hitPoint = null) {
+    this.isDucking = true;
+    this.duckDuration = 0.22; // Brief micro-nudge (~220ms)
+    this.duckTimer = this.duckDuration;
+
+    // Subtle nudge displacement away from hit point or along ship's local axes
+    const breakSide = Math.random() > 0.5 ? 1 : -1;
+    this.visualHolder.getWorldQuaternion(_shipWorldQuat);
+    _right.set(1, 0, 0).applyQuaternion(_shipWorldQuat);
+    _shipFwd.set(0, 0, -1).applyQuaternion(_shipWorldQuat);
+    const upLocal = new THREE.Vector3(0, 1, 0).applyQuaternion(_shipWorldQuat);
+
+    // Gentle micro-nudge (~0.6 - 1.0m flinch), no huge altitude plunge
+    const diveDepth = -(0.4 + Math.random() * 0.4);
+    const lateralShift = breakSide * (0.5 + Math.random() * 0.4);
+    const forwardSurge = -(0.3 + Math.random() * 0.3); // Slight pushback from laser impact
+
+    this.duckTargetOffset.set(0, 0, 0)
+      .addScaledVector(upLocal, diveDepth)
+      .addScaledVector(_right, lateralShift)
+      .addScaledVector(_shipFwd, forwardSurge);
+
+    // Very subtle flinch bank (~5°), not an aggressive high-G roll
+    this.duckBank = breakSide * 0.08;
+  }
+
   takeDamage(amount, attackerId = null, hitPoint = null) {
     const result = super.takeDamage(amount, attackerId, hitPoint);
+
+    // Trigger immediate evasive duck reaction
+    this.triggerDuck(hitPoint);
+
     if (this.behavior && this.behavior.onDamaged) {
-      this.behavior.onDamaged(this, amount, attackerId);
+      this.behavior.onDamaged(this, amount, attackerId, hitPoint);
     }
     return result;
   }
@@ -172,6 +214,22 @@ export class AIEnemy extends EnemyEntity {
     // Execute behavior steering
     if (this.behavior) {
       this.behavior.update(dt, this, context);
+    }
+
+    // Dynamic impact micro-nudge kinematics
+    if (this.isDucking) {
+      this.duckTimer -= dt;
+      if (this.duckTimer <= 0) {
+        this.isDucking = false;
+        this.duckTargetOffset.set(0, 0, 0);
+        this.duckBank = 0;
+      }
+
+      // Snappy spring recovery for the nudge
+      const duckBlend = 1 - Math.exp(-14 * dt);
+      this.duckOffset.lerp(this.duckTargetOffset, duckBlend);
+      this.targetPosition.addScaledVector(this.duckOffset, dt * 1.4);
+      this.targetBank = THREE.MathUtils.lerp(this.targetBank, this.duckBank, 1 - Math.exp(-14 * dt));
     }
 
     // Weapon simulation with burst fire and lead tracking

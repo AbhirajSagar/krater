@@ -53,15 +53,18 @@
 export const MAPS_CONFIG = [
   {
     id: 'deep_space_belt',
-    name: 'Deep Space Belt',
-    shortName: 'Asteroid Belt',
-    description: 'Dense planetary debris belt in cold deep space. Heavy asteroid cover enables intense tactical dogfights and evasive maneuvers.',
-    badge: 'Asteroid Belt',
+    name: 'Deep Space',
+    shortName: 'Deep Space',
+    description: 'Star-dense cold cosmic void with orbital asteroid debris.',
+    badge: 'Deep Space',
     color: '#38bdf8',
     glow: 'rgba(56, 189, 248, 0.45)',
+    thumbnail: '/skyboxes/deep_space/thumbnail.png',
     skybox: {
       id: 'deep_space',
+      name: 'Deep Space',
       path: '/skyboxes/deep_space/',
+      thumbnail: '/skyboxes/deep_space/thumbnail.png',
       files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
     },
     asteroids: {
@@ -72,11 +75,7 @@ export const MAPS_CONFIG = [
       spawnRadiusMax: 460,
       heightRange: 130
     },
-    // User-customizable 3D environment models (stations, gates, satellites, etc.)
-    environmentModels: [
-      // Example:
-      // { id: 'outpost_core', path: '/models/Station.fbx', position: [0, 60, -250], rotation: [0, 0.4, 0], scale: 3.5 }
-    ],
+    environmentModels: [],
     lighting: {
       ambientColor: 0x334155,
       ambientIntensity: 0.52,
@@ -89,15 +88,18 @@ export const MAPS_CONFIG = [
   },
   {
     id: 'purple_nebula_station',
-    name: 'Purple Nebula Outpost',
+    name: 'Purple Nebula',
     shortName: 'Purple Nebula',
-    description: 'High-energy ionized gas nebula with vibrant violet dust and moderate asteroid clusters. Ideal for medium-range dogfights.',
-    badge: 'Cosmic Nebula',
+    description: 'Vibrant ionized gas cloud with rich violet dust lanes.',
+    badge: 'Purple Nebula',
     color: '#c084fc',
     glow: 'rgba(192, 132, 252, 0.45)',
+    thumbnail: '/skyboxes/purple_nebula/thumbnail.png',
     skybox: {
       id: 'purple_nebula',
+      name: 'Purple Nebula',
       path: '/skyboxes/purple_nebula/',
+      thumbnail: '/skyboxes/purple_nebula/thumbnail.png',
       files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
     },
     asteroids: {
@@ -121,15 +123,18 @@ export const MAPS_CONFIG = [
   },
   {
     id: 'blue_nebula_void',
-    name: 'Blue Nebula Expanse',
+    name: 'Blue Nebula',
     shortName: 'Blue Nebula',
-    description: 'Crystalline azure nebula with sparse tactical asteroid clusters, providing high pilot visibility and wide engagement angles.',
-    badge: 'High Visibility',
+    description: 'Crystalline azure nebula with brilliant stellar clusters.',
+    badge: 'Blue Nebula',
     color: '#00f0ff',
     glow: 'rgba(0, 240, 255, 0.45)',
+    thumbnail: '/skyboxes/blue_nebula/thumbnail.png',
     skybox: {
       id: 'blue_nebula',
+      name: 'Blue Nebula',
       path: '/skyboxes/blue_nebula/',
+      thumbnail: '/skyboxes/blue_nebula/thumbnail.png',
       files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
     },
     asteroids: {
@@ -153,15 +158,18 @@ export const MAPS_CONFIG = [
   },
   {
     id: 'golden_galaxy_core',
-    name: 'Golden Galaxy Core',
+    name: 'Golden Galaxy',
     shortName: 'Golden Galaxy',
-    description: 'Luminous galactic core bathed in warm stellar radiation with heavy orbital rock formations.',
-    badge: 'Solar Sector',
+    description: 'Luminous galactic core bathed in warm golden stellar radiation.',
+    badge: 'Golden Galaxy',
     color: '#fbbf24',
     glow: 'rgba(251, 191, 36, 0.45)',
+    thumbnail: '/skyboxes/golden_galaxy/thumbnail.png',
     skybox: {
       id: 'golden_galaxy',
+      name: 'Golden Galaxy',
       path: '/skyboxes/golden_galaxy/',
+      thumbnail: '/skyboxes/golden_galaxy/thumbnail.png',
       files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
     },
     asteroids: {
@@ -185,15 +193,18 @@ export const MAPS_CONFIG = [
   },
   {
     id: 'blue_pink_nebula',
-    name: 'Bifrost Nebula Drift',
+    name: 'Bifrost Nebula',
     shortName: 'Bifrost Nebula',
-    description: 'Spectacular dual-tone cosmic nebula where magenta and turquoise stellar winds collide. Medium asteroid coverage.',
-    badge: 'Chromatic Void',
+    description: 'Spectacular dual-tone cosmic nebula of colliding magenta and turquoise winds.',
+    badge: 'Bifrost Nebula',
     color: '#ec4899',
     glow: 'rgba(236, 72, 153, 0.45)',
+    thumbnail: '/skyboxes/blue_pink/thumbnail.png',
     skybox: {
       id: 'blue_pink',
+      name: 'Bifrost Nebula',
       path: '/skyboxes/blue_pink/',
+      thumbnail: '/skyboxes/blue_pink/thumbnail.png',
       files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
     },
     asteroids: {
@@ -214,40 +225,12 @@ export const MAPS_CONFIG = [
     },
     spaceDustTheme: 'blue_pink',
     arenaRadius: 550
-  },
-  {
-    id: 'open_void_duel',
-    name: 'Open Void Arena',
-    shortName: 'Open Void',
-    description: 'Empty deep space sector with zero asteroid obstructions. Pure high-speed dogfighting for skilled pilots.',
-    badge: 'Zero Debris / Pure Duel',
-    color: '#e2e8f0',
-    glow: 'rgba(226, 232, 240, 0.45)',
-    skybox: {
-      id: 'deep_space',
-      path: '/skyboxes/deep_space/',
-      files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
-    },
-    asteroids: {
-      enabled: false,
-      count: 0,
-      seed: 'open_void_sector'
-    },
-    environmentModels: [],
-    lighting: {
-      ambientColor: 0x1e293b,
-      ambientIntensity: 0.48,
-      directionalColor: 0xffffff,
-      directionalIntensity: 2.5,
-      sunPosition: [200, 200, 200]
-    },
-    spaceDustTheme: 'deep_space',
-    arenaRadius: 650
   }
 ];
 
 export function getMapById(id) {
-  return MAPS_CONFIG.find(m => m.id === id) || MAPS_CONFIG[0];
+  if (!id) return MAPS_CONFIG[0];
+  return MAPS_CONFIG.find(m => m.id === id || m.skybox?.id === id) || MAPS_CONFIG[0];
 }
 
 export function getDefaultMap() {

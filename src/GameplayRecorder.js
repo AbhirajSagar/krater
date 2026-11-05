@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 /**
  * GameplayRecorder - High-Performance Multi-Resolution Video Recorder
  * 
@@ -5,11 +7,18 @@
  * - Direct GPU-accelerated frame blitting (< 0.2ms overhead per frame)
  * - Zero artificial render-target overhead or main scene pixel-ratio inflation
  * - Multiple widescreen 16:9 resolutions: 4K UHD, 1440p 2K, 1080p FHD, 720p HD, 480p SD
- * - Excludes DOM UI (crosshair, touch controls, menus, telemetry)
+ * - Excludes DOM UI (crosshair, touch controls, menus, telemetry, health/radar)
+ * - Renders crisp tactical enemy markers & lead pips directly into video frames
  * - MP4 (H.264/AVC) hardware-accelerated encoding with WebM (VP9/VP8) fallback
  * - Automatic immediate video file download on stop
  * - Live recording timer, audio-visual feedback, and customizable resolution dropdown
  */
+
+// Scratch vectors for zero GC pressure during 60 FPS recording
+const _scratchCamSpace = new THREE.Vector3();
+const _scratchScreenVec = new THREE.Vector3();
+const _scratchLeadVec = new THREE.Vector3();
+const _scratchLeadCamSpace = new THREE.Vector3();
 
 /**
  * Master configuration flag to enable/disable the gameplay recording feature.
@@ -71,9 +80,10 @@ export class GameplayRecorder {
    * @param {HTMLCanvasElement} sourceCanvas - Main game WebGL canvas
    * @param {object} [options]
    * @param {boolean} [options.enabled=true] - Whether recording functionality is active
+   * @param {boolean} [options.recordEnemyMarkers=true] - Whether tactical enemy markers are drawn into the recording
    * @param {function} [options.onQualityChange] - Callback when resolution preset changes
    */
-  constructor(sourceCanvas, { enabled = true, onQualityChange = null } = {}) {
+  constructor(sourceCanvas, { enabled = true, recordEnemyMarkers = true, onQualityChange = null } = {}) {
     this.enabled = enabled;
     this.sourceCanvas = sourceCanvas;
     this.onQualityChange = onQualityChange;
@@ -82,6 +92,15 @@ export class GameplayRecorder {
     this.recordedChunks = [];
     this.stream = null;
     this.videoTrack = null;
+
+    let recordMarkers = recordEnemyMarkers;
+    try {
+      const stored = localStorage.getItem('spacegame_record_enemy_markers');
+      if (stored !== null) {
+        recordMarkers = stored === 'true';
+      }
+    } catch (_) {}
+    this.recordEnemyMarkers = recordMarkers;
 
     // DOM References
     this.widget = null;
@@ -154,6 +173,13 @@ export class GameplayRecorder {
       }
       this.hideToggleButton();
     }
+  }
+
+  setRecordEnemyMarkers(enabled) {
+    this.recordEnemyMarkers = Boolean(enabled);
+    try {
+      localStorage.setItem('spacegame_record_enemy_markers', String(this.recordEnemyMarkers));
+    } catch (_) {}
   }
 
   updateDimensions() {
@@ -583,9 +609,11 @@ export class GameplayRecorder {
   /**
    * Called every animation frame in the main render loop right after WebGL render.
    * Performs an ultra-fast GPU texture blit of the center 16:9 slice onto the offscreen record canvas (< 0.2ms).
+   * Renders tactical enemy markers directly onto the recorded video frames while excluding all other UI.
    * @param {HTMLCanvasElement} sourceCanvas
+   * @param {object} [renderContext] Live combat context with camera, enemyManager, etc.
    */
-  recordFrame(sourceCanvas) {
+  recordFrame(sourceCanvas, renderContext = null) {
     if (!this.enabled || !this.isRecording) return;
     const srcW = sourceCanvas.width;
     const srcH = sourceCanvas.height;
@@ -617,9 +645,256 @@ export class GameplayRecorder {
       0, 0, this.targetWidth, this.targetHeight
     );
 
+    // Draw enemy markers directly into the recorded video frame
+    if (this.recordEnemyMarkers && renderContext) {
+      this.drawEnemyMarkers(srcW, srcH, cropX, cropY, cropW, cropH, renderContext);
+    }
+
     // Prompt capture stream if browser track supports manual frame request
     if (this.videoTrack && typeof this.videoTrack.requestFrame === 'function') {
       this.videoTrack.requestFrame();
+    }
+  }
+
+  /**
+   * Draws tactical enemy target markers (in-view diamonds, predictive lead aim pips, and offscreen indicators)
+   * directly onto the recording canvas, perfectly aligned with the recorded 16:9 frame.
+   * Completely excludes all other UI (health/shield vitals, minimap/radar, touch controls, chat, scoreboard, menus).
+   */
+  drawEnemyMarkers(srcW, srcH, cropX, cropY, cropW, cropH, renderContext) {
+    const { camera, localShipPos, enemyManager, remotePlayersManager, isInBattle } = renderContext;
+    if (!isInBattle || !camera) return;
+
+    const targetsProvider = enemyManager || remotePlayersManager;
+    if (!targetsProvider || typeof targetsProvider.getAllPlayers !== 'function') return;
+
+    const players = targetsProvider.getAllPlayers();
+    if (!players || players.length === 0) return;
+
+    const scaleFactor = this.targetHeight / 1080;
+    const recW = this.targetWidth;
+    const recH = this.targetHeight;
+    const recMargin = Math.max(36 * scaleFactor, Math.min(recW, recH) * 0.045);
+    const halfW = (recW / 2) - recMargin;
+    const halfH = (recH / 2) - recMargin;
+    const cx = recW / 2;
+    const cy = recH / 2;
+
+    const scaleX = recW / cropW;
+    const scaleY = recH / cropH;
+
+    for (let i = 0; i < players.length; i++) {
+      const p = players[i];
+      if (!p || p.isDestroyed || (p.root && !p.root.visible)) continue;
+      if (!p.root || !p.root.position) continue;
+
+      // Distance from player to enemy in meters
+      const dist = localShipPos ? Math.round(localShipPos.distanceTo(p.root.position)) : 0;
+
+      // Project enemy into camera local space to check if in front
+      _scratchCamSpace.copy(p.root.position).applyMatrix4(camera.matrixWorldInverse);
+      const camX = _scratchCamSpace.x;
+      const camY = _scratchCamSpace.y;
+      const camZ = _scratchCamSpace.z;
+      const isInFront = camZ < -0.1;
+
+      // 3D to 2D screen coordinate projection
+      _scratchScreenVec.copy(p.root.position).project(camera);
+      const sourcePixelX = (_scratchScreenVec.x * 0.5 + 0.5) * srcW;
+      const sourcePixelY = (-_scratchScreenVec.y * 0.5 + 0.5) * srcH;
+
+      const recX = (sourcePixelX - cropX) * scaleX;
+      const recY = (sourcePixelY - cropY) * scaleY;
+
+      const isInView = isInFront && (
+        recX >= recMargin && recX <= (recW - recMargin) &&
+        recY >= recMargin && recY <= (recH - recMargin)
+      );
+
+      // Check distance to center of screen for lock detection
+      const shipDistToCenter = Math.hypot(recX - cx, recY - cy) / scaleFactor;
+      let isLocked = shipDistToCenter < 36;
+
+      // Predictive lead aim pip calculation
+      let leadRecX = 0;
+      let leadRecY = 0;
+      let hasLeadPip = false;
+      const enemySpeed = p.velocity && typeof p.velocity.length === 'function'
+        ? p.velocity.length()
+        : (p.currentSpeed || 0);
+
+      if (enemySpeed > 1.2 && p.velocity) {
+        const tLead = dist / 280.0;
+        _scratchLeadVec.copy(p.root.position).addScaledVector(p.velocity, tLead);
+        _scratchLeadCamSpace.copy(_scratchLeadVec).applyMatrix4(camera.matrixWorldInverse);
+
+        if (_scratchLeadCamSpace.z < -0.1) {
+          _scratchLeadVec.project(camera);
+          const leadSrcX = (_scratchLeadVec.x * 0.5 + 0.5) * srcW;
+          const leadSrcY = (-_scratchLeadVec.y * 0.5 + 0.5) * srcH;
+          leadRecX = (leadSrcX - cropX) * scaleX;
+          leadRecY = (leadSrcY - cropY) * scaleY;
+          hasLeadPip = true;
+
+          const leadDistToCenter = Math.hypot(leadRecX - cx, leadRecY - cy) / scaleFactor;
+          if (leadDistToCenter < 40) {
+            isLocked = true;
+          }
+        }
+      }
+
+      if (isInView) {
+        // 1. Draw Predictive Lead Aim Pip
+        if (hasLeadPip) {
+          const pipRadius = (isLocked ? 4.5 : 3.5) * scaleFactor;
+          this.ctx.save();
+          this.ctx.beginPath();
+          this.ctx.arc(leadRecX, leadRecY, pipRadius, 0, Math.PI * 2);
+          this.ctx.fillStyle = isLocked ? 'rgba(255, 23, 68, 0.45)' : 'rgba(0, 240, 255, 0.25)';
+          this.ctx.fill();
+
+          this.ctx.lineWidth = 1.5 * scaleFactor;
+          this.ctx.strokeStyle = isLocked ? '#ff1744' : 'rgba(0, 240, 255, 0.85)';
+          this.ctx.shadowColor = isLocked ? '#ff1744' : 'rgba(0, 240, 255, 0.6)';
+          this.ctx.shadowBlur = (isLocked ? 10 : 6) * scaleFactor;
+          this.ctx.stroke();
+          this.ctx.restore();
+        }
+
+        // 2. Draw In-View Tactical Diamond Marker
+        const distScale = THREE.MathUtils.clamp(1.15 - (dist / 800) * 0.35, 0.75, 1.25);
+        const s = (isLocked ? 10 : 8) * distScale * scaleFactor;
+
+        this.ctx.save();
+        this.ctx.translate(recX, recY);
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -s);
+        this.ctx.lineTo(s, 0);
+        this.ctx.lineTo(0, s);
+        this.ctx.lineTo(-s, 0);
+        this.ctx.closePath();
+
+        this.ctx.fillStyle = isLocked ? 'rgba(255, 23, 68, 0.25)' : 'rgba(255, 51, 102, 0.15)';
+        this.ctx.fill();
+
+        this.ctx.lineWidth = (isLocked ? 2.2 : 1.8) * scaleFactor;
+        this.ctx.strokeStyle = isLocked ? '#ff1744' : '#ff3366';
+        this.ctx.shadowColor = isLocked ? '#ff1744' : 'rgba(255, 51, 102, 0.75)';
+        this.ctx.shadowBlur = (isLocked ? 10 : 6) * scaleFactor;
+        this.ctx.stroke();
+
+        // Center dot
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, 1.5 * scaleFactor, 0, Math.PI * 2);
+        this.ctx.fillStyle = isLocked ? '#ff1744' : '#ff3366';
+        this.ctx.fill();
+
+        // Crosshair targeting reticle ticks when locked onto this enemy
+        if (isLocked) {
+          const tickLen = 4.5 * scaleFactor;
+          const tickGap = s + 3 * scaleFactor;
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, -tickGap);
+          this.ctx.lineTo(0, -tickGap - tickLen);
+          this.ctx.moveTo(0, tickGap);
+          this.ctx.lineTo(0, tickGap + tickLen);
+          this.ctx.moveTo(-tickGap, 0);
+          this.ctx.lineTo(-tickGap - tickLen, 0);
+          this.ctx.moveTo(tickGap, 0);
+          this.ctx.lineTo(tickGap + tickLen, 0);
+          this.ctx.strokeStyle = '#ff1744';
+          this.ctx.lineWidth = 1.6 * scaleFactor;
+          this.ctx.stroke();
+        }
+
+        this.ctx.restore();
+
+        // Distance Text below diamond
+        this.ctx.save();
+        const fontSize = Math.round(11 * scaleFactor);
+        this.ctx.font = `bold ${fontSize}px "SF Mono", "Consolas", "Roboto Mono", monospace`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'top';
+        const textY = recY + s + (4 * scaleFactor);
+        const distText = `${dist}m`;
+
+        this.ctx.lineWidth = 3 * scaleFactor;
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.strokeText(distText, recX, textY);
+
+        this.ctx.fillStyle = isLocked ? '#ff1744' : '#ffffff';
+        this.ctx.shadowColor = isLocked ? 'rgba(255, 23, 68, 0.85)' : 'rgba(0, 0, 0, 0.9)';
+        this.ctx.shadowBlur = (isLocked ? 6 : 4) * scaleFactor;
+        this.ctx.fillText(distText, recX, textY);
+        this.ctx.restore();
+
+      } else {
+        // 3. Draw Off-Screen Directional Indicator Arrow
+        let dirX = camX;
+        let dirY = -camY;
+        const isBehind = camZ >= -0.1;
+        if (isBehind && Math.hypot(dirX, dirY) < 0.05) {
+          dirX = 0;
+          dirY = 1;
+        }
+        const len = Math.hypot(dirX, dirY);
+        if (len > 0.0001) {
+          dirX /= len;
+          dirY /= len;
+        } else {
+          dirX = 0;
+          dirY = 1;
+        }
+
+        const edgeScale = Math.min(
+          Math.abs(halfW / (dirX || 0.0001)),
+          Math.abs(halfH / (dirY || 0.0001))
+        );
+
+        const edgeX = THREE.MathUtils.clamp(cx + dirX * edgeScale, recMargin, recW - recMargin);
+        const edgeY = THREE.MathUtils.clamp(cy + dirY * edgeScale, recMargin, recH - recMargin);
+        const angle = Math.atan2(dirY, dirX);
+        const isDanger = dist < 160;
+
+        // Draw rotated arrow
+        this.ctx.save();
+        this.ctx.translate(edgeX, edgeY);
+        this.ctx.rotate(angle + Math.PI / 2);
+
+        const arrowSize = 9 * scaleFactor;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -arrowSize);
+        this.ctx.lineTo(arrowSize * 0.75, arrowSize * 0.7);
+        this.ctx.lineTo(0, arrowSize * 0.3);
+        this.ctx.lineTo(-arrowSize * 0.75, arrowSize * 0.7);
+        this.ctx.closePath();
+
+        this.ctx.fillStyle = isDanger ? '#ff1744' : '#ff3366';
+        this.ctx.shadowColor = isDanger ? '#ff1744' : 'rgba(255, 51, 102, 0.75)';
+        this.ctx.shadowBlur = (isDanger ? 12 : 6) * scaleFactor;
+        this.ctx.fill();
+        this.ctx.restore();
+
+        // Draw distance text next to arrow
+        this.ctx.save();
+        const fontSize = Math.round(10 * scaleFactor);
+        this.ctx.font = `bold ${fontSize}px "SF Mono", "Consolas", "Roboto Mono", monospace`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'top';
+        const textY = edgeY + (8 * scaleFactor);
+        const distText = `${dist}m`;
+
+        this.ctx.lineWidth = 3 * scaleFactor;
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.strokeText(distText, edgeX, textY);
+
+        this.ctx.fillStyle = isDanger ? '#ff8099' : '#ffffff';
+        this.ctx.shadowColor = isDanger ? 'rgba(255, 23, 68, 0.85)' : 'rgba(0, 0, 0, 0.9)';
+        this.ctx.shadowBlur = (isDanger ? 6 : 4) * scaleFactor;
+        this.ctx.fillText(distText, edgeX, textY);
+        this.ctx.restore();
+      }
     }
   }
 

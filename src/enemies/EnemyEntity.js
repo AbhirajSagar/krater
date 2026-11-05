@@ -15,6 +15,8 @@ import { createStarSparrowMaterial, SPARROW_THEMES } from '../StarSparrowMateria
 const _shipQuat = new THREE.Quaternion();
 const _shipDir = new THREE.Vector3();
 const _worldPos = new THREE.Vector3();
+const _impactDir = new THREE.Vector3();
+const _sparkNormal = new THREE.Vector3();
 
 let _idCounter = 1;
 
@@ -33,12 +35,18 @@ export class EnemyEntity {
     this.config = SPACESHIP_CONFIGS[this.shipIndex] || SPACESHIP_CONFIGS[0];
 
     // Vitals
-    this.maxHealth = options.maxHealth ?? options.health ?? 100;
+    this.maxHealth = options.maxHealth ?? options.health ?? 160;
     this.maxShield = options.maxShield ?? options.shield ?? 100;
     this.health = options.health ?? this.maxHealth;
     this.shield = options.shield ?? this.maxShield;
     this.scoreValue = options.scoreValue ?? 100;
     this.isDestroyed = false;
+
+    // Physical & visual impact recoil (spring-damper shock)
+    this.impactOffset = new THREE.Vector3();
+    this.impactVelocity = new THREE.Vector3();
+    this.impactRotation = new THREE.Vector3();
+    this.impactRotVelocity = new THREE.Vector3();
 
     // Radius & Bounding Sphere
     this.radius = options.radius ?? 3.6;
@@ -265,7 +273,38 @@ export class EnemyEntity {
       return { damage: 0, shield: 0, health: 0, isDestroyed: true };
     }
 
-    this.flashShield(0.35);
+    // Visual hull hit flash
+    if (this.currentMaterial && this.currentMaterial.triggerHitFlash) {
+      this.currentMaterial.triggerHitFlash(1.0);
+    }
+
+    if (this.shield > 0) {
+      this.flashShield(0.4);
+    }
+
+    // Physical kinetic recoil impulse & angular jolt
+    if (hitPoint) {
+      _impactDir.subVectors(this.root.position, hitPoint).normalize();
+      if (_impactDir.lengthSq() < 0.001) {
+        _impactDir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+      }
+    } else {
+      _impactDir.set(0, 0, 1).applyQuaternion(this.root.quaternion);
+    }
+
+    const kickImpulse = Math.min(2.4, 0.8 + amount * 0.03);
+    this.impactVelocity.addScaledVector(_impactDir, kickImpulse);
+
+    // Subtle tactile angular flinch
+    this.impactRotVelocity.x += (Math.random() - 0.5) * 1.4;
+    this.impactRotVelocity.y += (Math.random() - 0.5) * 1.0;
+    this.impactRotVelocity.z += (Math.random() - 0.5) * 1.6;
+
+    // Localized sparks at hit point
+    if (hitPoint && this.sparkSystem) {
+      _sparkNormal.subVectors(hitPoint, this.root.position).normalize();
+      this.sparkSystem.spawnSparks(hitPoint, _sparkNormal, true);
+    }
 
     let damageRemaining = Math.max(0, amount);
     if (this.shield > 0) {
@@ -423,9 +462,25 @@ export class EnemyEntity {
     this.root.position.lerp(this.targetPosition, lerpRate);
     this.root.quaternion.slerp(this.targetQuaternion, lerpRate);
 
-    // Visual banking tilt
+    // Damped spring recovery for tactile visual impact recoil
+    const springK = 52.0;
+    const damping = 12.0;
+    this.impactVelocity.addScaledVector(this.impactOffset, -springK * dt);
+    this.impactVelocity.multiplyScalar(Math.exp(-damping * dt));
+    this.impactOffset.addScaledVector(this.impactVelocity, dt);
+
+    this.impactRotVelocity.addScaledVector(this.impactRotation, -springK * dt);
+    this.impactRotVelocity.multiplyScalar(Math.exp(-damping * dt));
+    this.impactRotation.addScaledVector(this.impactRotVelocity, dt);
+
+    // Visual banking tilt + impact shudder
     this.currentBank = THREE.MathUtils.lerp(this.currentBank, this.targetBank, 1 - Math.exp(-12 * dt));
-    this.visualHolder.rotation.z = this.currentBank;
+    this.visualHolder.position.copy(this.impactOffset);
+    this.visualHolder.rotation.set(
+      this.impactRotation.x,
+      this.impactRotation.y,
+      this.currentBank + this.impactRotation.z
+    );
 
     // Smooth speed
     this.currentSpeed = THREE.MathUtils.lerp(this.currentSpeed, this.targetSpeed, 1 - Math.exp(-10 * dt));

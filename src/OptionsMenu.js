@@ -13,6 +13,7 @@ export class OptionsMenu {
     this.onToggleDevStats = options.onToggleDevStats || null;
     this.onGraphicsChange = options.onGraphicsChange || null;
     this.onRecordQualityChange = options.onRecordQualityChange || null;
+    this.onRecordEnemyMarkersChange = options.onRecordEnemyMarkersChange || null;
     this.recordingEnabled = options.recordingEnabled ?? true;
     this.isOpen = false;
     this.canControl = false;
@@ -23,6 +24,7 @@ export class OptionsMenu {
     this.graphicsPreset = 'high'; // 'high', 'balanced', 'performance'
     this.shadowsEnabled = true;
     this.recordQuality = '1080p';
+    this.recordEnemyMarkers = true;
 
     try {
       if (typeof localStorage !== 'undefined') {
@@ -33,6 +35,8 @@ export class OptionsMenu {
         if (savedShadows !== null) this.shadowsEnabled = savedShadows === 'true';
         const savedQuality = localStorage.getItem('spacegame_record_quality');
         if (savedQuality) this.recordQuality = savedQuality;
+        const savedMarkers = localStorage.getItem('spacegame_record_enemy_markers');
+        if (savedMarkers !== null) this.recordEnemyMarkers = savedMarkers === 'true';
       }
     } catch {
       this.devStatsEnabled = false;
@@ -44,6 +48,7 @@ export class OptionsMenu {
     this.updateDevStatsUI();
     this.updateGraphicsUI();
     this.updateRecordResolutionUI(this.recordQuality);
+    this.updateRecordEnemyMarkersUI();
   }
 
   setSpaceship(spaceship) {
@@ -164,6 +169,18 @@ export class OptionsMenu {
               </button>
             </div>
 
+            <!-- Record Enemy Markers Toggle Row -->
+            <div id="option-row-record-markers" class="option-row">
+              <div class="option-info">
+                <span class="option-label">Record Enemy Markers</span>
+                <span class="option-desc">Include tactical target diamonds, distance & lead aim pips in video</span>
+              </div>
+              <button id="btn-record-markers-toggle" class="glass-btn-sm" aria-label="Toggle Recording of Enemy Markers">
+                <span class="dev-toggle-dot" id="record-markers-toggle-dot"></span>
+                <span id="label-record-markers">ON</span>
+              </button>
+            </div>
+
             <!-- Stats for Nerds / Developer Telemetry Row (Gameplay only) -->
             <div id="option-row-dev-stats" class="option-row hidden">
               <div class="option-info">
@@ -212,6 +229,10 @@ export class OptionsMenu {
     this.recordQualityBtn = document.getElementById('btn-record-quality-toggle');
     this.labelRecordQuality = document.getElementById('label-record-quality');
     this.descRecordQuality = document.getElementById('desc-record-quality');
+    this.recordMarkersRow = document.getElementById('option-row-record-markers');
+    this.recordMarkersBtn = document.getElementById('btn-record-markers-toggle');
+    this.recordMarkersToggleDot = document.getElementById('record-markers-toggle-dot');
+    this.labelRecordMarkers = document.getElementById('label-record-markers');
     this.setRecordingEnabled(this.recordingEnabled);
     this.devStatsBtn = document.getElementById('btn-dev-stats-toggle');
     this.devToggleDot = document.getElementById('dev-toggle-dot');
@@ -270,6 +291,12 @@ export class OptionsMenu {
     this.recordQualityBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.cycleRecordQuality();
+    });
+
+    // Record enemy markers toggle button action
+    this.recordMarkersBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleRecordEnemyMarkers();
     });
 
     // Dev stats toggle button action
@@ -587,10 +614,46 @@ export class OptionsMenu {
     }
   }
 
+  toggleRecordEnemyMarkers() {
+    this.recordEnemyMarkers = !this.recordEnemyMarkers;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('spacegame_record_enemy_markers', String(this.recordEnemyMarkers));
+      }
+    } catch (_) {}
+    this.updateRecordEnemyMarkersUI();
+    if (this.onRecordEnemyMarkersChange) {
+      this.onRecordEnemyMarkersChange(this.recordEnemyMarkers);
+    }
+  }
+
+  updateRecordEnemyMarkersUI() {
+    if (this.recordMarkersBtn) {
+      if (this.recordEnemyMarkers) {
+        this.recordMarkersBtn.classList.add('active');
+      } else {
+        this.recordMarkersBtn.classList.remove('active');
+      }
+    }
+    if (this.recordMarkersToggleDot) {
+      if (this.recordEnemyMarkers) {
+        this.recordMarkersToggleDot.classList.add('on');
+      } else {
+        this.recordMarkersToggleDot.classList.remove('on');
+      }
+    }
+    if (this.labelRecordMarkers) {
+      this.labelRecordMarkers.textContent = this.recordEnemyMarkers ? 'ON' : 'OFF';
+    }
+  }
+
   setRecordingEnabled(enabled) {
     this.recordingEnabled = Boolean(enabled);
     if (this.recordQualityRow) {
       this.recordQualityRow.classList.toggle('hidden', !this.recordingEnabled);
+    }
+    if (this.recordMarkersRow) {
+      this.recordMarkersRow.classList.toggle('hidden', !this.recordingEnabled);
     }
   }
 }

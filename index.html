@@ -24,34 +24,43 @@
       </div>
     </div>
 
-    <!-- Sci-Fi Minimal Rhombus Crosshair -->
+    <!-- Sci-Fi Spaceship Tactical Crosshair with Target Lock Brackets -->
     <div id="crosshair-container" class="crosshair-container" aria-hidden="true">
-      <svg class="crosshair-rhombus" viewBox="0 0 36 36" fill="none">
-        <polygon class="rhombus-outline" points="18,4 32,18 18,32 4,18" />
-        <circle class="rhombus-dot" cx="18" cy="18" r="1.5" />
-        <line class="rhombus-tick" x1="18" y1="1" x2="18" y2="3" />
-        <line class="rhombus-tick" x1="18" y1="33" x2="18" y2="35" />
-        <line class="rhombus-tick" x1="1" y1="18" x2="3" y2="18" />
-        <line class="rhombus-tick" x1="33" y1="18" x2="35" y2="18" />
+      <svg class="crosshair-rhombus" viewBox="0 0 44 44" fill="none">
+        <!-- Central Flight Boresight Rhombus -->
+        <polygon class="rhombus-outline" points="22,7 37,22 22,37 7,22" />
+        <circle class="rhombus-dot" cx="22" cy="22" r="1.5" />
+        <line class="rhombus-tick tick-top" x1="22" y1="2" x2="22" y2="5" />
+        <line class="rhombus-tick tick-bottom" x1="22" y1="39" x2="22" y2="42" />
+        <line class="rhombus-tick tick-left" x1="2" y1="22" x2="5" y2="22" />
+        <line class="rhombus-tick tick-right" x1="39" y1="22" x2="42" y2="22" />
+        <!-- Corner Targeting Brackets that animate and snap on lock -->
+        <path class="target-bracket bracket-tl" d="M 8,15 L 8,8 L 15,8" />
+        <path class="target-bracket bracket-tr" d="M 29,8 L 36,8 L 36,15" />
+        <path class="target-bracket bracket-bl" d="M 8,29 L 8,36 L 15,36" />
+        <path class="target-bracket bracket-br" d="M 36,29 L 36,36 L 29,36" />
       </svg>
     </div>
 
-    <!-- Minimal Weapon Ammo Telemetry -->
-    <div id="minimal-ammo-hud" class="minimal-ammo-hud" aria-label="Weapon Ammunition">
-      <div class="ammo-icon-wrap">
-        <svg class="ammo-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M4 4c0-1.1.9-2 2-2s2 .9 2 2v8H4V4zm0 10h4v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7zm6-10c0-1.1.9-2 2-2s2 .9 2 2v8h-4V4zm0 10h4v7a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-7z"/>
+    <!-- Minimal Spaceship HUD: Dashed Energy Core & Slanted Healthbar -->
+    <div id="minimal-ammo-hud" class="minimal-ammo-hud minimal-core-hud" aria-label="Spaceship HUD Avionics">
+      <!-- Dashed Energy Core Dial -->
+      <div class="energy-core-wrap">
+        <svg class="energy-core-svg" viewBox="0 0 54 54">
+          <defs>
+            <mask id="ammo-core-mask">
+              <circle id="ammo-mask-circle" class="mask-circle" cx="27" cy="27" r="22" stroke="#ffffff" stroke-width="7" fill="none" stroke-dasharray="138.23" stroke-dashoffset="0" />
+            </mask>
+          </defs>
+          <circle class="core-ring-bg" cx="27" cy="27" r="22" />
+          <circle class="core-ring-fill" cx="27" cy="27" r="22" mask="url(#ammo-core-mask)" />
         </svg>
+        <span class="core-ammo-num" id="ammo-current-val">60</span>
       </div>
-      <div class="ammo-content">
-        <div class="ammo-digits-wrap">
-          <span class="ammo-current" id="ammo-current-val">60</span>
-          <span class="ammo-divider">/</span>
-          <span class="ammo-total" id="ammo-total-val">60</span>
-        </div>
-        <div class="ammo-bar-track">
-          <div class="ammo-bar-fill" id="ammo-bar-fill" style="width: 100%;"></div>
-        </div>
+
+      <!-- Slanted Tech Healthbar -->
+      <div class="core-health-track">
+        <div class="core-health-fill" id="player-health-fill" style="width: 100%;"></div>
       </div>
     </div>
 

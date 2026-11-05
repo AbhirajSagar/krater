@@ -17,6 +17,7 @@ const _cockpitPos = new THREE.Vector3();
 const _pushNormal = new THREE.Vector3();
 const _hitPoint = new THREE.Vector3();
 const _scratchAimTarget = new THREE.Vector3();
+const _scratchScreenPos = new THREE.Vector3();
 const _shipWorldQuat = new THREE.Quaternion();
 const _shipDir = new THREE.Vector3();
 const _thrusterWorldPos = new THREE.Vector3();
@@ -131,6 +132,8 @@ export class SpaceshipController {
 
     // Crosshair HUD & Aim Target
     this.crosshairContainer = typeof document !== 'undefined' ? document.getElementById('crosshair-container') : null;
+    this._crosshairX = -1;
+    this._crosshairY = -1;
     this.targetMeshes = [];
     this.asteroidField = null;
     this.aimTargetPoint = null;
@@ -498,34 +501,93 @@ export class SpaceshipController {
     this.targetMeshes = objects || [];
   }
 
-  updateCrosshairAim() {
+  updateCrosshairAim(dt = 0.016) {
     if (!this.crosshairContainer || this.cameraMode === 2) return;
+
+    const defaultX = window.innerWidth * 0.5;
+    const defaultY = window.innerHeight * 0.5;
+
+    if (this._crosshairX < 0) {
+      this._crosshairX = defaultX;
+      this._crosshairY = defaultY;
+    }
+
+    let targetX = defaultX;
+    let targetY = defaultY;
+    let isLocked = false;
 
     // Check remote enemy players in aim cone first (using predictive lead point when moving)
     if (this.remotePlayersManager) {
       const enemyTarget = this.remotePlayersManager.getNearestTargetInAim(this.camera, 0.35);
-      if (enemyTarget && enemyTarget.player) {
-        this.crosshairContainer.classList.add('target-locked');
+      if (enemyTarget && enemyTarget.player && enemyTarget.player.root) {
+        isLocked = true;
         _scratchAimTarget.copy(enemyTarget.aimPoint || enemyTarget.leadPoint || enemyTarget.player.root.position);
         this.aimTargetPoint = _scratchAimTarget;
-        return;
+
+        // Position crosshair directly on the screen position where the current enemy is
+        _scratchScreenPos.copy(enemyTarget.player.root.position).project(this.camera);
+        targetX = (_scratchScreenPos.x * 0.5 + 0.5) * window.innerWidth;
+        targetY = (-_scratchScreenPos.y * 0.5 + 0.5) * window.innerHeight;
       }
     }
 
-    // Ultra-fast analytical bounding sphere raycast against asteroid field (0.01ms, zero polygon testing)
-    if (this.asteroidField) {
-      this._aimRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
-      const hit = this.asteroidField.raycastFast(this._aimRaycaster.ray, 500);
-      if (hit) {
-        this.crosshairContainer.classList.add('target-locked');
-        _scratchAimTarget.copy(hit.point);
-        this.aimTargetPoint = _scratchAimTarget;
-        return;
+    if (!isLocked) {
+      if (this.asteroidField) {
+        this._aimRaycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+        const hit = this.asteroidField.raycastFast(this._aimRaycaster.ray, 500);
+        if (hit) {
+          _scratchAimTarget.copy(hit.point);
+          this.aimTargetPoint = _scratchAimTarget;
+        } else {
+          this.aimTargetPoint = null;
+        }
+      } else {
+        this.aimTargetPoint = null;
       }
     }
 
-    this.crosshairContainer.classList.remove('target-locked');
-    this.aimTargetPoint = null;
+    // Smooth exponential damping towards target position:
+    // Snappy responsive glide when acquiring lock (24.0), elegant gliding return to default pos (14.0)
+    const smoothingSpeed = isLocked ? 24.0 : 14.0;
+    const factor = 1.0 - Math.exp(-smoothingSpeed * dt);
+    this._crosshairX += (targetX - this._crosshairX) * factor;
+    this._crosshairY += (targetY - this._crosshairY) * factor;
+
+    // Check distance to default screen center
+    const distToCenter = Math.hypot(this._crosshairX - defaultX, this._crosshairY - defaultY);
+
+    if (!isLocked && distToCenter < 0.75) {
+      this._crosshairX = defaultX;
+      this._crosshairY = defaultY;
+      this.crosshairContainer.style.left = '50%';
+      this.crosshairContainer.style.top = '50%';
+      this.crosshairContainer.classList.remove('returning');
+    } else {
+      this.crosshairContainer.style.left = `${this._crosshairX.toFixed(1)}px`;
+      this.crosshairContainer.style.top = `${this._crosshairY.toFixed(1)}px`;
+      if (!isLocked) {
+        this.crosshairContainer.classList.add('returning');
+      } else {
+        this.crosshairContainer.classList.remove('returning');
+      }
+    }
+
+    if (isLocked) {
+      this.crosshairContainer.classList.add('target-locked');
+    } else {
+      this.crosshairContainer.classList.remove('target-locked');
+    }
+  }
+
+  resetCrosshairPosition() {
+    this._crosshairX = -1;
+    this._crosshairY = -1;
+    if (this.crosshairContainer) {
+      this.crosshairContainer.classList.remove('target-locked');
+      this.crosshairContainer.classList.remove('returning');
+      this.crosshairContainer.style.left = '50%';
+      this.crosshairContainer.style.top = '50%';
+    }
   }
 
   toggleCameraMode() {
@@ -588,7 +650,7 @@ export class SpaceshipController {
       this.updateCamera(dt);
     }
     if (this.enabled && !this.isDestroyed) {
-      this.updateCrosshairAim();
+      this.updateCrosshairAim(dt);
     }
     if (this.sparkSystem) {
       this.sparkSystem.update(dt);
@@ -1267,6 +1329,7 @@ export class SpaceshipController {
       this.visualHolder.visible = false;
 
       if (this.crosshairContainer) {
+        this.resetCrosshairPosition();
         this.crosshairContainer.classList.remove('visible');
         this.crosshairContainer.style.display = 'none';
       }
@@ -1359,6 +1422,7 @@ export class SpaceshipController {
     }
 
     if (this.crosshairContainer) {
+      this.resetCrosshairPosition();
       this.crosshairContainer.style.display = this.cameraMode === 2 ? 'none' : 'flex';
       this.crosshairContainer.classList.add('visible');
     }

@@ -308,6 +308,8 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
     uCockpit2: { value: new THREE.Vector3(...(colors.cockpit2 || [0.122, 0.573, 0.855])) },
     uCockpit3: { value: new THREE.Vector3(...(colors.cockpit3 || [0.510, 0.953, 0.953])) },
 
+    uHitFlash: { value: 0.0 },
+
     tColors: { value: null },
     tLogosCockpit: { value: null },
     tWearout: { value: null },
@@ -368,6 +370,8 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
       uniform vec3 uCockpit2;
       uniform vec3 uCockpit3;
 
+      uniform float uHitFlash;
+
       vec3 sparrowSRGBToLinear(vec3 c) {
         return pow(c, vec3(2.2));
       }
@@ -411,6 +415,10 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
       float totalDarken = clamp(sootMask + darkenMask, 0.0, 1.0);
       vec3 finalBaseColor = peeledColor * (1.0 - totalDarken);
 
+      // Impact Hit Flash: intense white-hot electrical highlight across hull
+      vec3 hitFlashColor = vec3(1.0, 0.95, 0.90);
+      finalBaseColor = mix(finalBaseColor, hitFlashColor, clamp(uHitFlash, 0.0, 1.0) * 0.88);
+
       diffuseColor.rgb = finalBaseColor;
     `;
 
@@ -452,7 +460,8 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
       float cockpitMask = logosCockpit.b;
       vec3 hullEmission = (uEmission1 * emissionSample.r + uEmission2 * emissionSample.g + uEmission3 * emissionSample.b) * (1.0 - cockpitMask) * uEmissionMultiplier;
       vec3 cockpitEmission = (uCockpit1 * emissionSample.r + uCockpit2 * emissionSample.g + uCockpit3 * emissionSample.b) * cockpitMask * uCockpitMultiplier;
-      totalEmissiveRadiance += (hullEmission + cockpitEmission);
+      vec3 hitFlashEmission = vec3(1.0, 0.72, 0.40) * (clamp(uHitFlash, 0.0, 1.0) * 4.5);
+      totalEmissiveRadiance += (hullEmission + cockpitEmission + hitFlashEmission);
     `;
 
     shader.fragmentShader = shader.fragmentShader.replace(
@@ -496,6 +505,10 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
     uniforms.uEmissionMultiplier.value = Math.max(0, val);
   };
 
+  material.triggerHitFlash = (intensity = 1.0) => {
+    uniforms.uHitFlash.value = Math.max(uniforms.uHitFlash.value, intensity);
+  };
+
   // Dynamic animation update (e.g. engine pulse during boost & throttle)
   material.updateFlightVFX = (dt, isBoosting, throttle = 1.0) => {
     const baseMult = material.userData.baseEmissionMultiplier;
@@ -509,6 +522,13 @@ export function createStarSparrowMaterial(themeOrConfig = 'Red', options = {}) {
       targetMult,
       Math.min(1.0, dt * 10.0)
     );
+
+    // Smooth hit flash decay (~150ms duration)
+    if (uniforms.uHitFlash.value > 0.001) {
+      uniforms.uHitFlash.value = Math.max(0.0, uniforms.uHitFlash.value - dt * 6.5);
+    } else {
+      uniforms.uHitFlash.value = 0.0;
+    }
   };
 
   return material;

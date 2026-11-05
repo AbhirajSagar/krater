@@ -13,10 +13,19 @@ export class SkyboxManager {
     // Default list of space skyboxes located in public/skyboxes/
     this.skyboxes = [
       {
+        id: 'deep_space',
+        name: 'Deep Space',
+        type: 'cube',
+        path: '/skyboxes/deep_space/',
+        thumbnail: '/skyboxes/deep_space/thumbnail.png',
+        files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
+      },
+      {
         id: 'purple_nebula',
         name: 'Purple Nebula',
         type: 'cube',
         path: '/skyboxes/purple_nebula/',
+        thumbnail: '/skyboxes/purple_nebula/thumbnail.png',
         files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
       },
       {
@@ -24,20 +33,7 @@ export class SkyboxManager {
         name: 'Blue Nebula',
         type: 'cube',
         path: '/skyboxes/blue_nebula/',
-        files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
-      },
-      {
-        id: 'blue_pink',
-        name: 'Blue Pink Nebula',
-        type: 'cube',
-        path: '/skyboxes/blue_pink/',
-        files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
-      },
-      {
-        id: 'deep_space',
-        name: 'Deep Space',
-        type: 'cube',
-        path: '/skyboxes/deep_space/',
+        thumbnail: '/skyboxes/blue_nebula/thumbnail.png',
         files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
       },
       {
@@ -45,6 +41,15 @@ export class SkyboxManager {
         name: 'Golden Galaxy',
         type: 'cube',
         path: '/skyboxes/golden_galaxy/',
+        thumbnail: '/skyboxes/golden_galaxy/thumbnail.png',
+        files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
+      },
+      {
+        id: 'blue_pink',
+        name: 'Bifrost Nebula',
+        type: 'cube',
+        path: '/skyboxes/blue_pink/',
+        thumbnail: '/skyboxes/blue_pink/thumbnail.png',
         files: ['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']
       }
     ];

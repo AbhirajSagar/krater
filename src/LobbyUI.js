@@ -190,36 +190,43 @@ export class LobbyUI {
                 </button>
                 <div class="subnav-title-group">
                   <span class="subnav-step-badge">STEP 02 // 02</span>
-                  <span class="subnav-title">DEPLOY SECTOR</span>
+                  <span class="subnav-title">SELECT MAP</span>
                 </div>
               </div>
 
-              <!-- Selected Map Hero Card -->
-              <div class="sector-preview-hero" id="solo-sector-hero">
-                <div class="sector-hero-top">
-                  <span class="sector-hero-badge" id="solo-sector-badge">${activeMap.badge}</span>
-                  <span class="sector-hazard-badge" id="solo-sector-hazard">
-                    ${activeMap.asteroids?.enabled !== false ? 'Asteroids Active' : 'Clear Space'}
-                  </span>
+              <!-- Active Selected Skybox Banner -->
+              <div class="active-skybox-banner" id="solo-sector-hero">
+                <div class="active-skybox-badge-wrap">
+                  <span class="active-skybox-dot" id="solo-sector-dot" style="background: ${activeMap.color}; box-shadow: 0 0 8px ${activeMap.glow};"></span>
+                  <span class="active-skybox-title" id="solo-sector-name">${activeMap.name}</span>
                 </div>
-                <div class="sector-hero-name" id="solo-sector-name">${activeMap.name}</div>
-                <div class="sector-hero-desc" id="solo-sector-desc">${activeMap.description}</div>
+                <span class="active-skybox-pill" id="solo-sector-badge">ACTIVE SKYBOX</span>
               </div>
 
-              <!-- Arena Map Selection Section -->
-              <div class="sector-selector-section">
-                <span class="panel-section-label">SELECT COMBAT ZONE</span>
-                <div class="menu-skybox-grid menu-map-grid" id="menu-map-grid">
-                  ${MAPS_CONFIG.map(m => `
-                    <button class="menu-skybox-btn menu-map-btn ${m.id === activeMapId ? 'active' : ''}" 
-                            data-map-id="${m.id}" 
-                            type="button" 
-                            title="${m.description}">
-                      <span class="menu-skybox-dot menu-map-dot" style="background: ${m.color}; box-shadow: 0 0 8px ${m.glow};"></span>
-                      <span class="menu-skybox-label menu-map-label">${m.shortName}</span>
-                    </button>
-                  `).join('')}
-                </div>
+              <!-- All Skyboxes Grid with Visual Thumbnails and Clean Names -->
+              <div class="skybox-thumbnails-grid menu-map-grid" id="menu-map-grid">
+                ${MAPS_CONFIG.map(m => `
+                  <button class="skybox-thumb-card menu-map-btn ${m.id === activeMapId || m.skybox?.id === activeMapId ? 'active' : ''}" 
+                          data-map-id="${m.id}" 
+                          data-skybox-id="${m.skybox?.id || ''}"
+                          type="button"
+                          aria-label="Select ${escapeHTML(m.name)}">
+                    <div class="skybox-thumb-media">
+                      <img src="${m.thumbnail || `/skyboxes/${m.skybox?.id || m.id}/thumbnail.png`}" 
+                           alt="${escapeHTML(m.name)}" 
+                           class="skybox-thumb-img" 
+                           loading="lazy" />
+                      <div class="skybox-thumb-scrim"></div>
+                      <div class="skybox-thumb-check">
+                        ${Icons.check(13)}
+                      </div>
+                    </div>
+                    <div class="skybox-thumb-meta">
+                      <span class="skybox-thumb-dot" style="background: ${m.color}; box-shadow: 0 0 6px ${m.glow};"></span>
+                      <span class="skybox-thumb-name">${escapeHTML(m.name)}</span>
+                    </div>
+                  </button>
+                `).join('')}
               </div>
 
               <!-- Launch Solo Battle CTA Button -->
@@ -1093,27 +1100,34 @@ export class LobbyUI {
 
   updateActiveMapUI(mapId, mapName = null) {
     if (!mapId) return;
+    const targetMap = getMapById(mapId);
+    const resolvedId = targetMap ? targetMap.id : mapId;
+    const skyboxId = targetMap?.skybox?.id || mapId;
+
     const grid = document.getElementById('menu-map-grid');
     if (grid) {
       grid.querySelectorAll('.menu-map-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-map-id') === mapId);
+        const bMapId = btn.getAttribute('data-map-id');
+        const bSkyboxId = btn.getAttribute('data-skybox-id');
+        const isMatch = bMapId === resolvedId || bSkyboxId === skyboxId || bMapId === mapId;
+        btn.classList.toggle('active', isMatch);
       });
     }
 
-    const map = getMapById(mapId);
-    if (map) {
-      if (this.soloSectorBadge) this.soloSectorBadge.textContent = map.badge || 'COMBAT ZONE';
-      if (this.soloSectorHazard) {
-        this.soloSectorHazard.textContent = map.asteroids?.enabled !== false ? 'Asteroids Active' : 'Clear Space';
+    if (targetMap) {
+      if (this.soloSectorBadge) this.soloSectorBadge.textContent = 'ACTIVE SKYBOX';
+      if (this.soloSectorName) this.soloSectorName.textContent = mapName || targetMap.name;
+      const dot = document.getElementById('solo-sector-dot');
+      if (dot && targetMap.color) {
+        dot.style.background = targetMap.color;
+        dot.style.boxShadow = `0 0 8px ${targetMap.glow}`;
       }
-      if (this.soloSectorName) this.soloSectorName.textContent = mapName || map.name;
-      if (this.soloSectorDesc) this.soloSectorDesc.textContent = map.description || '';
     }
 
     // Also sync the dropdown in Create Room modal if present
     const createSelect = document.getElementById('create-map');
-    if (createSelect && createSelect.value !== mapId) {
-      createSelect.value = mapId;
+    if (createSelect && targetMap && createSelect.value !== targetMap.id) {
+      createSelect.value = targetMap.id;
     }
   }
 

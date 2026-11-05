@@ -165,6 +165,11 @@ const optionsMenu = new OptionsMenu({
     if (gameplayRecorder) {
       gameplayRecorder.setQuality(quality, false);
     }
+  },
+  onRecordEnemyMarkersChange: (enabled) => {
+    if (gameplayRecorder) {
+      gameplayRecorder.setRecordEnemyMarkers(enabled);
+    }
   }
 });
 applyGraphicsSettings(optionsMenu.getGraphicsConfig());
@@ -172,6 +177,7 @@ applyGraphicsSettings(optionsMenu.getGraphicsConfig());
 devStatsHUD.setVisible(false); // Telemetry stats are only visible during active gameplay
 gameplayRecorder = new GameplayRecorder(canvas, {
   enabled: ENABLE_RECORDER,
+  recordEnemyMarkers: optionsMenu.recordEnemyMarkers,
   onQualityChange: (quality) => {
     if (optionsMenu) {
       optionsMenu.updateRecordResolutionUI(quality);
@@ -180,11 +186,13 @@ gameplayRecorder = new GameplayRecorder(canvas, {
 });
 window.gameplayRecorder = gameplayRecorder;
 
-// Minimal Ammo Telemetry HUD elements
+// Minimal Dashed Energy Core & Extended Healthbar HUD elements
 let minimalAmmoHUD = null;
 let ammoCurrentVal = null;
-let ammoTotalVal = null;
-let ammoBarFill = null;
+let ammoMaskCircle = null;
+let playerHealthFill = null;
+
+const AMMO_CIRCUMFERENCE = 138.23; // 2 * PI * 22
 
 function updateAmmoUI(current, max) {
   if (!minimalAmmoHUD) return;
@@ -194,21 +202,32 @@ function updateAmmoUI(current, max) {
 
   if (ammoCurrentVal) {
     ammoCurrentVal.textContent = current;
-    ammoCurrentVal.className = `ammo-current${isLow ? ' low' : ''}${isEmpty ? ' empty' : ''}`;
   }
-  if (ammoTotalVal) {
-    ammoTotalVal.textContent = max;
+  if (!ammoMaskCircle) {
+    ammoMaskCircle = document.getElementById('ammo-mask-circle');
   }
-  if (!ammoBarFill) {
-    ammoBarFill = document.getElementById('ammo-bar-fill');
-  }
-  if (ammoBarFill) {
-    const pct = Math.max(0, Math.min(100, (current / max) * 100));
-    ammoBarFill.style.width = `${pct}%`;
+  if (ammoMaskCircle) {
+    const ratio = Math.max(0, Math.min(1, current / (max || 1)));
+    const offset = AMMO_CIRCUMFERENCE * (1 - ratio);
+    ammoMaskCircle.style.strokeDashoffset = offset.toFixed(1);
   }
 
   minimalAmmoHUD.classList.toggle('low', isLow);
   minimalAmmoHUD.classList.toggle('empty', isEmpty);
+}
+
+function updatePlayerHealthUI(shield, hull, maxShield = 100, maxHull = 100) {
+  if (!playerHealthFill) playerHealthFill = document.getElementById('player-health-fill');
+
+  const totalMax = (maxShield || 0) + (maxHull || 100);
+  const totalCur = Math.max(0, (shield || 0) + (hull || 0));
+  const pct = Math.max(0, Math.min(100, Math.round((totalCur / (totalMax || 1)) * 100)));
+
+  if (playerHealthFill) {
+    playerHealthFill.style.width = `${pct}%`;
+    playerHealthFill.classList.toggle('critical', pct <= 25);
+    playerHealthFill.classList.toggle('low', pct <= 50 && pct > 25);
+  }
 }
 
 // Strict initial touch/mobile capability check
@@ -372,6 +391,9 @@ function enterMainMenu(advanceSkybox = false) {
   if (lobbyUI) lobbyUI.showMenu();
   if (crosshairContainer) {
     crosshairContainer.classList.remove('visible');
+    crosshairContainer.classList.remove('target-locked');
+    crosshairContainer.style.left = '50%';
+    crosshairContainer.style.top = '50%';
     crosshairContainer.style.display = 'none';
   }
   if (touchControlsContainer) touchControlsContainer.classList.remove('visible');
@@ -443,11 +465,12 @@ function startBattle(room = null, isSolo = false) {
     touchControlsContainer.classList.add('visible');
   }
 
-  // Reveal minimal ammo telemetry HUD during battle
+  // Reveal tactical ammo & health HUD cluster during battle
   if (minimalAmmoHUD) {
     minimalAmmoHUD.classList.add('visible');
     if (spaceship) {
       updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+      updatePlayerHealthUI(spaceship.shield, spaceship.health, spaceship.maxShield, spaceship.maxHealth);
     }
   }
 
@@ -765,6 +788,7 @@ function animate() {
   // Update Tactical Combat HUD
   if (currentGameState === 'BATTLE') {
     if (combatHUD && spaceship) {
+      updatePlayerHealthUI(spaceship.shield, spaceship.health, spaceship.maxShield, spaceship.maxHealth);
       combatHUD.updateLocalVitals({
         shield: spaceship.shield,
         hull: spaceship.health,
@@ -835,7 +859,15 @@ function animate() {
   }
 
   renderer.render(scene, camera);
-  if (gameplayRecorder) gameplayRecorder.recordFrame(canvas);
+  if (gameplayRecorder) {
+    gameplayRecorder.recordFrame(canvas, {
+      camera,
+      localShipPos: spaceship ? spaceship.root.position : null,
+      enemyManager,
+      remotePlayersManager,
+      isInBattle: currentGameState === 'BATTLE'
+    });
+  }
   if (devStatsHUD) devStatsHUD.update(dt);
 }
 
@@ -1166,6 +1198,7 @@ function bindNetworkEvents() {
     };
 
     spaceship.onDamaged = (shield, hull, attackerId, hitPoint, sourcePos) => {
+      updatePlayerHealthUI(shield, hull, spaceship.maxShield, spaceship.maxHealth);
       if (combatHUD) combatHUD.updateLocalVitals({ shield, hull });
       if (currentGameState === 'BATTLE' && client.isConnected && client.room) {
         client.relay('PLAYER_DAMAGED', { playerId: client.playerId, shield, hull });
@@ -1186,6 +1219,9 @@ function bindNetworkEvents() {
       if (touchControlsContainer) touchControlsContainer.classList.remove('visible');
       if (crosshairContainer) {
         crosshairContainer.classList.remove('visible');
+        crosshairContainer.classList.remove('target-locked');
+        crosshairContainer.style.left = '50%';
+        crosshairContainer.style.top = '50%';
         crosshairContainer.style.display = 'none';
       }
 
@@ -1406,11 +1442,11 @@ async function initPipeline() {
   // Touch Controls
   touchControls = new TouchControls(spaceship, skyboxManager);
 
-  // Minimal Ammo Telemetry HUD
+  // Minimal Dashed Energy Core & Extended Healthbar HUD
   minimalAmmoHUD = document.getElementById('minimal-ammo-hud');
   ammoCurrentVal = document.getElementById('ammo-current-val');
-  ammoTotalVal = document.getElementById('ammo-total-val');
-  ammoBarFill = document.getElementById('ammo-bar-fill');
+  ammoMaskCircle = document.getElementById('ammo-mask-circle');
+  playerHealthFill = document.getElementById('player-health-fill');
 
   if (spaceship) {
     spaceship.onAmmoChanged = (current, max) => {
@@ -1424,6 +1460,7 @@ async function initPipeline() {
       }
     };
     updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+    updatePlayerHealthUI(spaceship.shield, spaceship.health, spaceship.maxShield, spaceship.maxHealth);
   }
 
   // Phase 5: Multiplayer Client, Remote Opponents & Modular Enemy System
@@ -1500,10 +1537,11 @@ async function initPipeline() {
         if (touchControls) touchControls.resetAll();
       }
 
-      // Restore ammo HUD
+      // Restore tactical HUD cluster
       if (minimalAmmoHUD) {
         minimalAmmoHUD.classList.add('visible');
         updateAmmoUI(spaceship.currentAmmo, spaceship.maxAmmo);
+        updatePlayerHealthUI(spaceship.shield, spaceship.health, spaceship.maxShield, spaceship.maxHealth);
       }
 
       // Update Combat HUD vitals

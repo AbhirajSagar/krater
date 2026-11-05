@@ -306,27 +306,18 @@ export class CombatHUD {
   updateLocalVitals(vitals) {
     Object.assign(this.localPlayerState, vitals);
 
-    const sPct = Math.max(0, Math.min(100, Math.round((this.localPlayerState.shield / this.localPlayerState.maxShield) * 100)));
-    if (this.shieldValEl) this.shieldValEl.textContent = `${sPct}%`;
-    if (this.shieldBarEl) this.shieldBarEl.style.width = `${sPct}%`;
+    if (!this.playerHealthFill) this.playerHealthFill = document.getElementById('player-health-fill');
 
-    const hPct = Math.max(0, Math.min(100, Math.round((this.localPlayerState.hull / this.localPlayerState.maxHull) * 100)));
-    if (this.hullValEl) this.hullValEl.textContent = `${hPct}%`;
-    if (this.hullBarEl) {
-      this.hullBarEl.style.width = `${hPct}%`;
-      if (hPct <= 25) {
-        this.hullBarEl.classList.add('critical');
-      } else {
-        this.hullBarEl.classList.remove('critical');
-      }
-    }
+    const maxS = this.localPlayerState.maxShield || 0;
+    const maxH = this.localPlayerState.maxHull || 100;
+    const totalMax = maxS + maxH;
+    const totalCur = Math.max(0, (this.localPlayerState.shield || 0) + (this.localPlayerState.hull || 0));
+    const pct = Math.max(0, Math.min(100, Math.round((totalCur / (totalMax || 1)) * 100)));
 
-    const bPct = Math.max(0, Math.min(100, Math.round((this.localPlayerState.boostEnergy / this.localPlayerState.maxBoostEnergy) * 100)));
-    if (this.boostValEl) this.boostValEl.textContent = `${bPct}%`;
-    if (this.boostBarEl) this.boostBarEl.style.width = `${bPct}%`;
-
-    if (this.speedValEl) {
-      this.speedValEl.textContent = Math.round(this.localPlayerState.speed * 3.6);
+    if (this.playerHealthFill) {
+      this.playerHealthFill.style.width = `${pct}%`;
+      this.playerHealthFill.classList.toggle('critical', pct <= 25);
+      this.playerHealthFill.classList.toggle('low', pct <= 50 && pct > 25);
     }
   }
 
@@ -819,7 +810,7 @@ export class CombatHUD {
         const arrow = this.offscreenArrowsMap.get(p.id);
         if (arrow) arrow.el.style.display = 'none';
 
-        // --- BAREBONES IN-VIEW ENEMY MARKER (Icon + Distance) ---
+        // --- BAREBONES IN-VIEW ENEMY MARKER (Icon + Distance, No Healthbars) ---
         let marker = this.targetBracketsMap.get(p.id);
         if (!marker) {
           const el = document.createElement('div');
